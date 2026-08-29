@@ -1,60 +1,82 @@
-# BIOBUZZ TeamCode
+# BIOBUZZ robot code (first year)
 
-Team-owned robot software for FTC DECODE (2025–2026). Official SDK code lives in `FtcRobotController/` and should not be edited for robot features.
+This folder is the only place you should write robot code.
 
-## Hardware map
+Do **not** edit files inside `FtcRobotController`. Those belong to FIRST.
 
-These names must match the Driver Hub configuration **exactly**:
+## Which file do I open?
 
-| Device | Config name | Type |
-|---|---|---|
-| Front-left drive | `leftFront` | Motor (DcMotorEx) |
-| Front-right drive | `rightFront` | Motor (DcMotorEx) |
-| Rear-left drive | `leftRear` | Motor (DcMotorEx) |
-| Rear-right drive | `rightRear` | Motor (DcMotorEx) |
-| Intake | `intake` | Motor (DcMotorEx) |
+| File | Open it when you want to... |
+|---|---|
+| `Robot.java` | Change motor names, directions, or speeds |
+| `TeleOpMain.java` | Change driver buttons |
+| `DriveTest.java` | Check that each wheel works |
+| `IntakeTest.java` | Check that the intake works |
+| `Auto.java` | Change what the robot does by itself at the start of a match |
 
-If INIT fails with a missing hardware device, fix the Driver Hub names or update `constants/Constants.java`.
+On the Driver Station those programs show up as:
 
-## Architecture
+- **TeleOp**
+- **Drive Test**
+- **Intake Test**
+- **Simple Auto**
 
-```text
-OpMode  →  Robot  →  subsystems (Drivetrain, Intake)
-                ↘  RobotHardware (only place that calls hardwareMap.get)
-```
+## Motor names
 
-- `constants/` — hardware names and tunable values
-- `hardware/` — hardware initialization
-- `subsystems/` — mechanism APIs used by OpModes
-- `robot/` — wires hardware to subsystems
-- `opmodes/teleop/` — competition TeleOp
-- `opmodes/testing/` — isolated hardware checks
+These names must match the robot configuration on the Driver Hub **exactly** (spelling and capital letters):
 
-## OpModes
+- `leftFront`
+- `rightFront`
+- `leftRear`
+- `rightRear`
+- `intake`
 
-| Driver Station name | Group | Purpose |
-|---|---|---|
-| Main TeleOp | Competition | Drive + intake |
-| Drivetrain Test | Testing | One-motor direction / encoder check |
-| Intake Test | Testing | Intake / outtake power check |
+If the app crashes when you press INIT and says it cannot find a device, the name on the Hub does not match `Robot.java`.
 
-## First robot bring-up
+## First time on the robot
 
-1. Create a robot configuration on the Driver Hub using the names above.
-2. Run **Drivetrain Test**. Hold A: robot should drive straight forward; all encoder counts should increase.
-3. If a wheel runs backward, reverse that motor in `RobotHardware`, not in TeleOp.
-4. Run **Intake Test**. Confirm collection vs expel directions.
-5. Run **Main TeleOp**.
+1. Make a robot configuration on the Driver Hub using the names above.
+2. Run **Drive Test**. Hold **A**. The robot should drive straight forward.
+3. If one wheel goes the wrong way, open `Robot.java` and swap `FORWARD` / `REVERSE` on that motor.
+4. Run **Intake Test**. Right trigger should pull pieces in.
+5. Run **TeleOp**.
 
-## Adding a subsystem
+## Common problems
 
-1. Add the hardware name to `Constants`.
-2. Initialize the device in `RobotHardware`.
-3. Create a class under `subsystems/`.
-4. Construct it in `Robot`.
-5. Call it from TeleOp / Auto.
-6. Add a testing OpMode.
+**Robot does nothing / crashes on INIT**  
+A motor name is wrong. Check the Driver Hub config against `Robot.java`.
 
-## What not to do yet
+**Robot drives backward when I push the stick forward**  
+Swap `FORWARD` and `REVERSE` on all four drive motors in `Robot.java`.
 
-Do not add Road Runner, a command framework, PID wrappers, or vision until TeleOp is reliable on the robot.
+**Robot turns or strafes instead of going straight**  
+One motor is reversed. Use Drive Test (D-pad) to find which wheel is wrong.
+
+**Intake is backwards**  
+Change `intake.setDirection` in `Robot.java`.
+
+**Intake is too fast or too weak**  
+Change `INTAKE_SPEED` or `OUTTAKE_SPEED` at the top of `Robot.java`.
+
+**I want a different button**  
+Edit `TeleOpMain.java`. That file is only about the controllers.
+
+## How to add a new motor (for example a launcher)
+
+1. Add the motor on the Driver Hub and give it a name, like `launcher`.
+2. In `Robot.java`, add:
+   - a name constant
+   - a `public DcMotor launcher;`
+   - `launcher = hardwareMap.get(DcMotor.class, "launcher");`
+   - a method like `public void launcherOn() { launcher.setPower(0.8); }`
+3. In `TeleOpMain.java`, call that method from a button, for example `if (gamepad1.a) { robot.launcherOn(); }`
+
+## How to change Auto
+
+Open `Auto.java`. It already drives forward for 1 second.
+
+- `robot.drive(0.5, 0, 0);` means forward at half speed. The three numbers are forward, strafe, turn.
+- `sleep(1000);` waits 1 second (1000 milliseconds).
+- Always call `robot.stop();` when the movement is done.
+
+Test on the field every time you change a number.
