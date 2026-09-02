@@ -1,7 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.bylazar.telemetry.TelemetryManager;
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.Pose;
+import com.pedropathing.paths.PathChain;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
+import java.util.function.Supplier;
 
 /**
  * This is the program you run during the driver-controlled period.
@@ -19,58 +25,26 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
  * To change a button, edit this file. To change a motor speed or direction,
  * edit Robot.java instead.
  */
+
 @TeleOp(name = "TeleOp", group = "Competition")
-public class TeleOpMain extends LinearOpMode {
+public class TeleOpMain extends OpMode {
+    private Follower follower;
+    public static Pose startingPose;
+    private boolean automatedDrive;
+    private Supplier<PathChain> pathChain;
+    private TelemetryManager telemetryM;
+
+    // Uncomment if slow mode is to be implemented
+    // private boolean slowMode = false;
+    // private double slowModeMultiplier = 0.5;
 
     @Override
-    public void runOpMode() {
-        Robot robot = new Robot(hardwareMap);
+    public void init() {
+        
+    }
 
-        telemetry.addLine("Ready. Press START on the Driver Station.");
-        telemetry.update();
-        waitForStart();
+    @Override
+    public void loop() {
 
-        while (opModeIsActive()) {
-
-            // FTC controllers report "stick up" as a negative number, so we flip it.
-            double forward = -gamepad1.left_stick_y;
-            double strafe = gamepad1.left_stick_x;
-            double turn = gamepad1.right_stick_x;
-
-            // Ignore tiny stick values when the stick is at rest (stops motor buzzing).
-            if (Math.abs(forward) < 0.05) {
-                forward = 0;
-            }
-            if (Math.abs(strafe) < 0.05) {
-                strafe = 0;
-            }
-            if (Math.abs(turn) < 0.05) {
-                turn = 0;
-            }
-
-            // Hold right bumper to drive slowly (helpful for lining up).
-            if (gamepad1.right_bumper) {
-                forward = forward * Robot.SLOW_MODE;
-                strafe = strafe * Robot.SLOW_MODE;
-                turn = turn * Robot.SLOW_MODE;
-            }
-
-            robot.drive(forward, strafe, turn);
-
-            if (gamepad1.right_trigger > 0.1 || gamepad2.right_trigger > 0.1) {
-                robot.intakeOn();
-            } else if (gamepad1.left_trigger > 0.1 || gamepad2.left_trigger > 0.1) {
-                robot.intakeReverse();
-            } else {
-                robot.intakeOff();
-            }
-
-            telemetry.addData("forward", forward);
-            telemetry.addData("strafe", strafe);
-            telemetry.addData("turn", turn);
-            telemetry.update();
-        }
-
-        robot.stop();
     }
 }
