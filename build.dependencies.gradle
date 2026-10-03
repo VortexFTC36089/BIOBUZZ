@@ -1,6 +1,9 @@
 repositories {
     mavenCentral()
     google() // Needed for androidx
+    // Pedro Pathing 3.x artifacts (revhub + AutoTune). Official install:
+    // https://pedropathing.com/docs/pathing/installation
+    maven { url 'https://repo.dairy.foundation/releases/' }
 }
 
 dependencies {
@@ -13,5 +16,10 @@ dependencies {
     implementation 'org.firstinspires.ftc:FtcCommon:12.0.0'
     implementation 'org.firstinspires.ftc:Vision:12.0.0'
     implementation 'androidx.appcompat:appcompat:1.2.0'
+
+    // Pedro Pathing 3.0.1 (latest stable in the official Quickstart, 2026-09-18).
+    // Docs still show tuning:1.0.0; Quickstart uses 1.0.1, which we follow.
+    implementation 'com.pedropathing:revhub:3.0.1'
+    implementation 'com.pedropathing:tuning:1.0.1'
 }
 

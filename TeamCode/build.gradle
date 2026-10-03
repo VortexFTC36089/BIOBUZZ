@@ -19,6 +19,10 @@ apply from: '../build.dependencies.gradle'
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
 
+    // Pedro 3 / Quickstart require compileSdk 34. Override here instead of
+    // editing SDK-owned build.common.gradle or FtcRobotController/.
+    compileSdk 34
+
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }

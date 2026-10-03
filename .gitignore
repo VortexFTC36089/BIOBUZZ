@@ -79,3 +79,7 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+# Editor / toolchain leftovers
+*.swp
+.kotlin/
