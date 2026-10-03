@@ -51,28 +51,29 @@ You will mostly edit Java under `TeamCode/src/main/java/org/firstinspires/ftc/te
 
 ---
 
-## 3. Folder structure
+## 3. Files
+
+Team code is one package. The only extra folder is `pedroPathing/`, which holds Pedro’s official tuner files.
 
 ```
 TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
-├── RobotConstants.java     Hardware names, intake power, slow mode, home pose
-├── opmodes/teleop/         MainTeleOp
-├── opmodes/auto/           Match autos (empty until paths are written)
-├── opmodes/test/           Intake and drivetrain direction tests
-├── subsystems/             One class per mechanism (IntakeSubsystem)
-├── pedroPathing/           Constants, Tuning, official AutoTune procedures
-├── util/                   Small helpers (ToggleButton)
-└── samples/                Optional copies of SDK samples (keep @Disabled)
+├── RobotConstants.java          Hardware names and powers
+├── MainTeleOp.java              Match drive + intake
+├── IntakeSubsystem.java         Intake motor
+├── IntakeTest.java              Intake-only test
+├── DrivetrainDirectionTest.java Spin one wheel at a time
+├── ToggleButton.java            Press-once helper
+└── pedroPathing/                Constants, Tuning, AutoTune procedures
 ```
 
 | File | Open this when… |
 |---|---|
 | `RobotConstants.java` | You need a hardware name or a power number |
-| `opmodes/teleop/MainTeleOp.java` | You want to change driver controls |
-| `subsystems/IntakeSubsystem.java` | You want to change intake behavior |
+| `MainTeleOp.java` | You want to change driver controls |
+| `IntakeSubsystem.java` | You want to change intake behavior |
 | `pedroPathing/Constants.java` | You finished an AutoTune and have numbers to paste |
 
-SDK sample OpModes stay in `FtcRobotController/.../external/samples/` and are already `@Disabled`. Copy one into `samples/` only if you want to start from it.
+SDK samples stay in `FtcRobotController/.../external/samples/` and are already `@Disabled`.
 
 ---
 
@@ -179,14 +180,9 @@ Docs: https://pedropathing.com/docs/pathing/tuning/foresight
 
 ## 7. Adding code
 
-| You want… | Put it here |
-|---|---|
-| A new driver program | `opmodes/teleop` |
-| A match autonomous | `opmodes/auto` |
-| A hardware test | `opmodes/test` |
-| A new mechanism | `subsystems` + a name in `RobotConstants` |
+Put new OpModes and mechanisms next to `MainTeleOp.java`. Add hardware names to `RobotConstants`. Pedro numbers go in `pedroPathing/Constants.java`.
 
-Never hardcode `"frontLeft"` or `0.8` in an OpMode. Read `RobotConstants` (and `pedroPathing/Constants` for Pedro).
+Never hardcode `"frontLeft"` or `0.8` in an OpMode.
 
 ### Naming
 

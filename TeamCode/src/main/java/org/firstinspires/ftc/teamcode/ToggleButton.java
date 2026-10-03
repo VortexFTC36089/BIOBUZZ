@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.util;
+package org.firstinspires.ftc.teamcode;
 
 /**
  * Rising-edge detector for a gamepad button.
