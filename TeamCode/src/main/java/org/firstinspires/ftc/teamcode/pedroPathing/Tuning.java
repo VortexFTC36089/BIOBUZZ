@@ -2,9 +2,13 @@ package org.firstinspires.ftc.teamcode.pedroPathing;
 
 import com.pedropathing.algorithm.Foresight;
 import com.pedropathing.revhub.drivetrains.Mecanum;
+import com.pedropathing.revhub.localizers.PinpointConfig;
 import com.pedropathing.revhub.localizers.PinpointLocalizer;
 import com.pedropathing.tuning.autotune.Procedure;
 import com.pedropathing.tuning.autotune.Tuner;
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 
 /**
@@ -39,11 +43,16 @@ public class Tuning {
      *
      * @return the official Pinpoint AutoTune procedure
      */
-    @Tuner
-    public static Procedure pinpointTuner() {
-        return new PinpointTuner();
-    }
-
+    public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
+        c.name.set("pinpoint");
+        c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        c.xPodOffset.set(3.365852175735113);
+        c.yPodOffset.set(3.794639166884535);
+        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.globalDistanceUnit.set(DistanceUnit.INCH);
+        c.offsetUnits.set(DistanceUnit.INCH);
+    });
     /**
      * Identifies Foresight velocities, braking, and feedback gains.
      *
