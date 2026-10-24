@@ -19,7 +19,7 @@ dependencies {
 
     // Pedro Pathing 3.0.1 (latest stable in the official Quickstart, 2026-09-18).
     // Docs still show tuning:1.0.0; Quickstart uses 1.0.1, which we follow.
-    implementation 'com.pedropathing:revhub:3.0.1'
-    implementation 'com.pedropathing:tuning:1.0.1'
+    implementation 'com.pedropathing:revhub:3.0.2'
+    implementation 'com.pedropathing:tuning:1.0.0'
 }
 

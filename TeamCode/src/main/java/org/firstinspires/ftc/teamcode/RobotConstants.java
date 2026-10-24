@@ -45,10 +45,10 @@ public final class RobotConstants {
      * config owns direction because the follower is what commands the wheels.
      */
     public static final class Drive {
-        public static final String FRONT_LEFT = "left_front";
-        public static final String FRONT_RIGHT = "right_front";
-        public static final String BACK_LEFT = "left_back";
-        public static final String BACK_RIGHT = "right_back";
+        public static final String FRONT_LEFT = "frontLeft";
+        public static final String FRONT_RIGHT = "frontRight";
+        public static final String BACK_LEFT = "backLeft";
+        public static final String BACK_RIGHT = "backRight";
 
         /**
          * Scale applied to stick input while slow mode is held.

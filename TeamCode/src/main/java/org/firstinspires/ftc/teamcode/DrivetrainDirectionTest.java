@@ -40,7 +40,7 @@ public class DrivetrainDirectionTest extends OpMode {
      */
     @Override
     public void loop() {
-        double power = 0.60;
+        double power = 0.30;
         frontLeft.setPower(gamepad1.a ? power : 0.0);
         frontRight.setPower(gamepad1.b ? power : 0.0);
         backLeft.setPower(gamepad1.x ? power : 0.0);

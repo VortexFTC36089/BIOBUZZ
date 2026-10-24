@@ -4,6 +4,8 @@ import com.pedropathing.algorithm.Foresight;
 import com.pedropathing.algorithm.ForesightConfig;
 import com.pedropathing.controllers.Controller;
 import com.pedropathing.follower.Follower;
+import com.pedropathing.math.Matrix;
+import com.pedropathing.math.Vector2D;
 import com.pedropathing.revhub.drivetrains.Mecanum;
 import com.pedropathing.revhub.drivetrains.MecanumConfig;
 import com.pedropathing.revhub.localizers.PinpointConfig;
@@ -40,12 +42,6 @@ import org.firstinspires.ftc.teamcode.RobotConstants;
  */
 public final class Constants {
 
-    /**
-     * Prevents anyone from constructing this holder class.
-     */
-    private Constants() {
-        // Constants + factory only.
-    }
 
     /**
      * Mecanum motor names and directions.
@@ -74,23 +70,14 @@ public final class Constants {
      */
     public static PinpointConfig localizerConfig = new PinpointConfig(
             c -> {
-                c.name.set(RobotConstants.Localizer.PINPOINT);
-
-                // TODO(team): confirm 4-bar vs swingarm vs custom pods
-                c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-
-                // TODO(team): tune — run Pinpoint AutoTuner or measure from robot center
-                c.xPodOffset.set(0.0);
-                c.yPodOffset.set(0.0);
-
-                // TODO(team): verify direction with Pinpoint AutoTuner
+                c.name.set("pinpoint");
+                c.xPodOffset.set(2.187); // TODO(team): tune
+                c.yPodOffset.set(-4.572); // TODO(team): tune
                 c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
                 c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-
-                c.globalDistanceUnit.set(DistanceUnit.INCH);
-                c.offsetUnits.set(DistanceUnit.INCH);
             }
     );
+
 
     /**
      * Foresight path-following algorithm.
@@ -102,23 +89,25 @@ public final class Constants {
      */
     public static ForesightConfig foresightConfig = new ForesightConfig(
             c -> {
-                // Official example starting gains from pedropathing.com Constants.
-                // TODO(team): replace this entire block with Foresight AutoTune output
                 Controller primaryTranslationalForward = Controller.proportional(0.3);
                 Controller secondaryTranslationalForward = Controller.proportional(0.1);
                 Controller primaryTranslationalLateral = Controller.proportional(0.3);
                 Controller secondaryTranslationalLateral = Controller.proportional(0.1);
-
-                c.forwardTranslational.set(
-                        Controller.piecewise(secondaryTranslationalForward)
-                                .put(2.5, primaryTranslationalForward)
-                );
-                c.strafeTranslational.set(
-                        Controller.piecewise(secondaryTranslationalLateral)
-                                .put(2.5, primaryTranslationalLateral)
-                );
+                c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
+                c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
+                c.coast.set(Controller.proportionalFeedforward(0.010978350889324107));
+                c.brake.set(Controller.proportionalFeedforward(0.008731598255925491));
+                c.headingFeedback.set(Controller.proportional(5.258721785960744));
+                c.headingBrakeCoefficients.set(Vector2D.cartesian(0.05642143125655298, 0.0063829525363003695));
+                c.linearBrakeCoefficients.set(Matrix.diag(0.10605894992901523, 0.08719146175596092));
+                c.quadraticBrakeCoefficients.set(Matrix.diag(0.0014663966976606565, 0.0013837064502458813));
+                c.maxAchievableForwardVelocity.set(72.72923108818539);
+                c.maxAchievableStrafeVelocity.set(52.34323936525474);
+                c.naturalForwardDeceleration.set(85.01144677379789);
+                c.naturalStrafeDeceleration.set(104.49787535782846);
             }
     );
+
 
     /**
      * Builds a follower for this robot using the configs above.
@@ -126,22 +115,11 @@ public final class Constants {
      * @param hardwareMap FTC hardware map from the running OpMode
      * @return a follower that owns drive motors, Pinpoint, and Foresight
      */
-    public static Follower create(HardwareMap hardwareMap) {
+    public static Follower create(HardwareMap h) {
         return new Follower(
-                new PinpointLocalizer(hardwareMap, localizerConfig),
-                new Mecanum(hardwareMap, drivetrainConfig),
+                new PinpointLocalizer(h, localizerConfig),
+                new Mecanum(h, drivetrainConfig),
                 new Foresight(foresightConfig)
         );
-    }
-
-    /**
-     * Alias for {@link #create(HardwareMap)} so older Pedro 2.x examples
-     * that call {@code createFollower} still compile against this file.
-     *
-     * @param hardwareMap FTC hardware map from the running OpMode
-     * @return the same follower {@link #create(HardwareMap)} would return
-     */
-    public static Follower createFollower(HardwareMap hardwareMap) {
-        return create(hardwareMap);
     }
 }

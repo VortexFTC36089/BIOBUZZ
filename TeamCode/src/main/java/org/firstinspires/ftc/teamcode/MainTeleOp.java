@@ -38,7 +38,7 @@ public class MainTeleOp extends OpMode {
     private boolean intakeLatched;
     private boolean drivingToHome;
 
-    private long lastLoopNanos;
+    private double lastLoopNanos;
 
     /**
      * Builds the follower and intake. Drive commands start in {@link #loop()}

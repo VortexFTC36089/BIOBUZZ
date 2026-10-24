@@ -35,7 +35,7 @@ public class Tuning {
      */
     @Tuner
     public static Procedure mecanumTuner() {
-        return new MecanumTuner();
+        return new PinpointTuner();
     }
 
     /**
