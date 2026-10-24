@@ -114,7 +114,7 @@ Pedro owns the drive motors. TeleOp calls `Constants.create(hardwareMap)`, then 
 
 Pedro is a library that knows where the robot is (Pinpoint) and can drive from sticks or follow paths. Create a follower with `Constants.create(hardwareMap)` (or `createFollower`). Call `follower.update()` every loop. Pose **x/y are inches**, **heading is radians**. On the field, **+X is forward** and **+Y is left**.
 
-This is Pedro **3.0.1** (`com.pedropathing:revhub:3.0.1` + `com.pedropathing:tuning:1.0.1`). It is not the old 2.x `FollowerBuilder` API.
+This is Pedro **3.0.2** (`com.pedropathing:revhub:3.0.1` + `com.pedropathing:tuning:1.0.1`). It is not the old 2.x `FollowerBuilder` API.
 
 ---
 
