@@ -112,7 +112,7 @@ public final class Constants {
     /**
      * Builds a follower for this robot using the configs above.
      *
-     * @param hardwareMap FTC hardware map from the running OpMode
+     * @param h FTC hardware map from the running OpMode
      * @return a follower that owns drive motors, Pinpoint, and Foresight
      */
     public static Follower create(HardwareMap h) {
