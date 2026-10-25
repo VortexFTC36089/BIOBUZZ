@@ -19,7 +19,7 @@ import static com.pedropathing.api.Paths.line;
  * robot. Bindings are listed in {@link #init()} telemetry.
  *
  * <p>Hardware: four mecanum motors and Pinpoint from {@link Constants}, plus
- * the intake motor from {@link RobotConstants.Intake}.
+ * the intake motor and two-position servo from {@link RobotConstants}.
  *
  * <p>Do not run path-following (home pose) until Pinpoint and Foresight are
  * tuned. Manual drive still works before that if motor directions are right.
@@ -50,14 +50,13 @@ public class MainTeleOp extends OpMode {
         follower = Constants.create(hardwareMap);
         intake = new IntakeSubsystem(hardwareMap);
 
-        fieldCentric = false;
-        intakeLatched = false;
         drivingToHome = false;
 
         telemetry.addLine("Main TeleOp ready");
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
         telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
+        telemetry.addLine("B = toggle servo A/B");
         telemetry.update();
     }
 
@@ -82,18 +81,14 @@ public class MainTeleOp extends OpMode {
         // turn    = +right_x (right stick right = clockwise / negative
         //            heading in FTC... Pedro documents this un-negated).
         double forward = -gamepad1.left_stick_y;
-        double strafe = gamepad1.left_stick_x;
-        double turn = gamepad1.right_stick_x;
+        double strafe = -gamepad1.left_stick_x;
+        double turn = -gamepad1.right_stick_x;
 
-        boolean slowMode = gamepad1.left_bumper;
+        boolean slowMode = false;
         if (slowMode) {
             forward *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
             strafe *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
             turn *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
-        }
-
-        if (fieldCentricToggle.update(gamepad1.x)) {
-            fieldCentric = !fieldCentric;
         }
 
         // Back (not Start) so we do not fight the Driver Station's Start
@@ -201,9 +196,6 @@ public class MainTeleOp extends OpMode {
      * both triggers are held so a stuck latch can still spit a jam.
      */
     private void updateIntakeFromGamepad() {
-        if (intakeLatchToggle.update(gamepad1.a)) {
-            intakeLatched = !intakeLatched;
-        }
 
         boolean reverseHeld = gamepad1.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
         boolean intakeHeld = gamepad1.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;

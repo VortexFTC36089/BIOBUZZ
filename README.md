@@ -23,6 +23,7 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Back left drive | Motor | `backLeft` |
 | Back right drive | Motor | `backRight` |
 | Intake | Motor | `intake` |
+| Two-position servo | Servo | `servo` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
 Pinpoint wiring (from Pedro docs):
@@ -60,6 +61,7 @@ TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
 ├── RobotConstants.java          Hardware names and powers
 ├── MainTeleOp.java              Match drive + intake
 ├── IntakeSubsystem.java         Intake motor
+├── ServoSubsystem.java          Two-position servo
 ├── IntakeTest.java              Intake-only test
 ├── DrivetrainDirectionTest.java Spin one wheel at a time
 ├── ToggleButton.java            Press-once helper
@@ -102,6 +104,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Right trigger | Intake while held |
 | Left trigger | Reverse while held |
 | A | Latch continuous intake on/off |
+| B | Toggle servo between position A and B |
 | Y | Follow a line to the home pose (cancels if you move a stick) |
 
 Stick signs follow Pedro’s TeleOp guide: `-left_y`, `+left_x`, `+right_x`.

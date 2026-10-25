@@ -13,6 +13,7 @@ package org.firstinspires.ftc.teamcode;
  *   <li>Four mecanum drive motors: {@code frontLeft}, {@code frontRight},
  *       {@code backLeft}, {@code backRight}</li>
  *   <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
+ *   <li>One two-position servo named {@code servo}</li>
  *   <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
  */
@@ -45,10 +46,10 @@ public final class RobotConstants {
      * config owns direction because the follower is what commands the wheels.
      */
     public static final class Drive {
-        public static final String FRONT_LEFT = "frontLeft";
-        public static final String FRONT_RIGHT = "frontRight";
-        public static final String BACK_LEFT = "backLeft";
-        public static final String BACK_RIGHT = "backRight";
+        public static final String FRONT_LEFT = "left_front";
+        public static final String FRONT_RIGHT = "right_front";
+        public static final String BACK_LEFT = "left_back";
+        public static final String BACK_RIGHT = "right_back";
 
         /**
          * Scale applied to stick input while slow mode is held.
@@ -93,7 +94,7 @@ public final class RobotConstants {
          * Power used while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.80;
+        public static final double INTAKE_POWER = 0.70;
 
         /**
          * Power used while reversing / outtaking. Negative of intake by
@@ -109,6 +110,29 @@ public final class RobotConstants {
          * prevents the intake from twitching when nobody is pressing.
          */
         public static final double TRIGGER_DEADZONE = 0.15;
+    }
+
+    /**
+     * Two-position servo (claw, hood, flap, etc.).
+     *
+     * <p>Servo positions are unitless in {@code [0.0, 1.0]}. 0.0 and 1.0
+     * are the mechanical ends of travel; measure the two poses you actually
+     * want and put them here.
+     */
+    public static final class Servo {
+        public static final String NAME = "servo";
+
+        /**
+         * First pose. Used at init so the mechanism starts in a known place.
+         */
+        // TODO(team): measure this on the robot
+        public static final double POSITION_A = 0.0;
+
+        /**
+         * Second pose.
+         */
+        // TODO(team): measure this on the robot
+        public static final double POSITION_B = 1.0;
     }
 
     /**

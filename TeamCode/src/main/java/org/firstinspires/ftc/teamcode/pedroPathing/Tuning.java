@@ -35,51 +35,22 @@ public class Tuning {
      */
     @Tuner
     public static Procedure mecanumTuner() {
+        return new MecanumTuner();
+    }
+
+    @Tuner
+    public static Procedure tests() {
+        return new Tests(hardwareMap -> new Mecanum(hardwareMap, Constants.drivetrainConfig), (hardwareMap -> new PinpointLocalizer(hardwareMap, Constants.localizerConfig)), () -> new Foresight(Constants.foresightConfig));
+    }
+
+    @Tuner
+    public static Procedure pinpointTuner() {
         return new PinpointTuner();
     }
 
-    /**
-     * Measures Pinpoint pod directions and offsets.
-     *
-     * @return the official Pinpoint AutoTune procedure
-     */
-    public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
-        c.name.set("pinpoint");
-        c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(3.365852175735113);
-        c.yPodOffset.set(3.794639166884535);
-        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-        c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-        c.globalDistanceUnit.set(DistanceUnit.INCH);
-        c.offsetUnits.set(DistanceUnit.INCH);
-    });
-    /**
-     * Identifies Foresight velocities, braking, and feedback gains.
-     *
-     * <p>Uses this team's {@link Constants} so the tuner drives the same
-     * hardware TeleOp will use.
-     *
-     * @return the official Foresight AutoTune procedure
-     */
     @Tuner
     public static Procedure foresightTuner() {
-        return new ForesightTuner(
-                hardwareMap -> new PinpointLocalizer(hardwareMap, Constants.localizerConfig),
-                hardwareMap -> new Mecanum(hardwareMap, Constants.drivetrainConfig)
-        );
+        return new ForesightTuner((hardwareMap) -> new PinpointLocalizer(hardwareMap, Constants.localizerConfig), (hardwareMap) -> new Mecanum(hardwareMap, Constants.drivetrainConfig));
     }
 
-    /**
-     * Manual drive, pose, hold, line, and curve checks after tuning.
-     *
-     * @return the official Tests procedure wired to this robot
-     */
-    @Tuner
-    public static Procedure tests() {
-        return new Tests(
-                hardwareMap -> new Mecanum(hardwareMap, Constants.drivetrainConfig),
-                hardwareMap -> new PinpointLocalizer(hardwareMap, Constants.localizerConfig),
-                () -> new Foresight(Constants.foresightConfig)
-        );
-    }
 }
