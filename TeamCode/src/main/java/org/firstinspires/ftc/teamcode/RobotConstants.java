@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.pedropathing.math.Pose;
+
 /**
  * Single place for hardware map names and non-Pedro tunable values.
  *
@@ -136,17 +138,18 @@ public final class RobotConstants {
     }
 
     /**
-     * Optional "drive here" pose used by TeleOp automation.
+     * Named field waypoints / poses used by Pedro Pathing in Auto and TeleOp.
      *
-     * <p>Pedro reports position in inches and heading in radians. These
-     * defaults are placeholders so the code compiles; they are not a real
-     * field location.
+     * <p>Pedro's {@link Pose} uses inches for {@code x} and {@code y}, and
+     * radians for {@code heading} (+X forward, +Y left, counterclockwise
+     * positive). Use {@link Math#toRadians(double)} so angles are easy to read.
      */
-    public static final class Field {
-        // TODO(team): replace with a measured field pose after localization is tuned
-        public static final double HOME_X_INCHES = 0.0;
-        public static final double HOME_Y_INCHES = 0.0;
-        public static final double HOME_HEADING_RADIANS = 0.0;
+    public static final class PedroPoints {
+        // TODO(team): replace these placeholder poses with measured field locations
+        public static final Pose START = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose HOME = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose SCORE = new Pose(24.0, 24.0, Math.toRadians(90.0));
+        public static final Pose PARK = new Pose(48.0, 24.0, Math.toRadians(90.0));
     }
 
     /**

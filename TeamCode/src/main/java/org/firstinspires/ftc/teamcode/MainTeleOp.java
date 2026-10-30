@@ -62,6 +62,7 @@ public class MainTeleOp extends OpMode {
     @Override
     public void init() {
         follower = Constants.create(hardwareMap);
+        follower.setPose(RobotConstants.PedroPoints.START);
         intake = new IntakeSubsystem(hardwareMap);
         shooter = new ShooterSubsystem(hardwareMap);
 
@@ -186,15 +187,11 @@ public class MainTeleOp extends OpMode {
      * Starts a straight line to the placeholder home pose.
      *
      * <p>Pedro coordinates: x/y inches, heading radians. The pose in
-     * {@link RobotConstants.Field} is a TODO until you measure a real spot.
+     * {@link RobotConstants.PedroPoints} is a TODO until you measure a real spot.
      */
     private void startDriveToHome() {
-        Pose home = new Pose(
-                RobotConstants.Field.HOME_X_INCHES,
-                RobotConstants.Field.HOME_Y_INCHES,
-                RobotConstants.Field.HOME_HEADING_RADIANS
-        );
-        // TODO(team): replace HOME_* with a real field pose after Pinpoint is tuned
+        Pose home = RobotConstants.PedroPoints.HOME;
+        // TODO(team): replace PedroPoints.HOME with a real field pose after Pinpoint is tuned
         Path homePath = line(follower.pose(), home).linear(follower.pose(), home);
         follower.follow(homePath);
         drivingToHome = true;
