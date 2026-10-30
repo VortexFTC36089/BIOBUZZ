@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.follower.Follower;
+import com.pedropathing.ivy.Command;
+import com.pedropathing.ivy.Scheduler;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -13,9 +15,17 @@ import org.firstinspires.ftc.teamcode.AutoPoses.Routine;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import static com.pedropathing.api.Paths.line;
+import static com.pedropathing.ivy.Scheduler.schedule;
+import static com.pedropathing.ivy.commands.Commands.instant;
+import static com.pedropathing.ivy.commands.Commands.waitMs;
+import static com.pedropathing.ivy.commands.Commands.waitUntil;
+import static com.pedropathing.ivy.groups.Groups.parallel;
+import static com.pedropathing.ivy.groups.Groups.race;
+import static com.pedropathing.ivy.groups.Groups.sequential;
+import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 
 /**
- * Match autonomous.
+ * Match autonomous built with Pedro Pathing 3 and Ivy.
  *
  * <ol>
  *   <li>Start at shooting position 1, spin up, shoot the preloaded balls.</li>
@@ -32,11 +42,6 @@ import static com.pedropathing.api.Paths.line;
  * <p>Pick the alliance during init (X = blue, B = red). Poses come from
  * {@link AutoPoses}; nothing in this file is a field coordinate.
  *
- * <p>The routine is a state machine run from {@link #loop()} rather than a
- * {@code LinearOpMode} so mechanisms can run while a path is being followed
- * and so every state has a timeout. An untuned robot that never reaches a
- * pose moves on instead of sitting still for 30 seconds.
- *
  * <p>Hardware: mecanum drive and Pinpoint from {@link Constants}; the
  * intake motor, shooter motor and feed servo from {@link RobotConstants}.
  */
@@ -44,37 +49,18 @@ import static com.pedropathing.api.Paths.line;
 public class MainAutonomous extends OpMode {
 
     /**
-     * Steps of the routine, in order.
-     */
-    private enum State {
-        SPIN_UP_1,
-        SHOOT_1,
-        DRIVE_TO_FLOWER_1,
-        INTAKE_FLOWER_1_FORWARD,
-        INTAKE_FLOWER_1_BACK,
-        DRIVE_TO_SHOOT_POSITION_2,
-        SHOOT_2,
-        DRIVE_TO_FLOWER_2,
-        INTAKE_FLOWER_2_FORWARD,
-        INTAKE_FLOWER_2_BACK,
-        RETURN_TO_SHOOT_POSITION_2,
-        SHOOT_3,
-        DONE
-    }
-
-    /**
      * Timing limits. Path timeouts are safety nets, not targets: a well
      * tuned robot finishes long before them.
      */
     private static final class Timing {
-        /** Give up on a long drive after this many seconds. */
-        static final double PATH_TIMEOUT_SECONDS = 5.0;
-        /** Give up on the short flower creep after this many seconds. */
-        static final double CREEP_TIMEOUT_SECONDS = 2.0;
+        /** Give up on a long drive after this many milliseconds. */
+        static final int PATH_TIMEOUT_MS = 5000;
+        /** Give up on the short flower creep after this many milliseconds. */
+        static final int CREEP_TIMEOUT_MS = 2000;
         /** Keep intaking this long after the creep-back finishes so the
          *  last ball is fully inside before driving off. */
         // TODO(team): tune on the robot
-        static final double INTAKE_SETTLE_SECONDS = 0.5;
+        static final int INTAKE_SETTLE_MS = 500;
     }
 
     /**
@@ -101,8 +87,7 @@ public class MainAutonomous extends OpMode {
     private Path flower2Back;
     private Path flower2ToShootPosition2;
 
-    private State state = State.SPIN_UP_1;
-    private final ElapsedTime stateTimer = new ElapsedTime();
+    private String currentStep = "INIT";
     private final ElapsedTime matchTimer = new ElapsedTime();
 
     /**
@@ -110,6 +95,8 @@ public class MainAutonomous extends OpMode {
      */
     @Override
     public void init() {
+        Scheduler.reset();
+
         follower = Constants.create(hardwareMap);
         intake = new IntakeSubsystem(hardwareMap);
         shooter = new ShooterSubsystem(hardwareMap);
@@ -122,7 +109,7 @@ public class MainAutonomous extends OpMode {
 
         applyAlliance(Alliance.BLUE);
 
-        telemetry.addLine("Main Autonomous ready");
+        telemetry.addLine("Main Autonomous (Ivy) ready");
         telemetry.addLine("X = BLUE   B = RED   (pick before Play)");
         telemetry.update();
     }
@@ -145,107 +132,26 @@ public class MainAutonomous extends OpMode {
     }
 
     /**
-     * Locks in the start pose and starts the flywheel.
+     * Locks in the start pose and schedules the Ivy autonomous routine.
      */
     @Override
     public void start() {
+        Scheduler.reset();
         follower.setPose(routine.shootPosition1);
+        follower.update();
         matchTimer.reset();
-        enter(State.SPIN_UP_1);
+        schedule(autoRoutine());
     }
 
     /**
-     * Runs one step of the state machine, then writes to hardware.
+     * Executes the Ivy scheduler and updates hardware each loop.
      */
     @Override
     public void loop() {
-        switch (state) {
-            // ---- Shot 1: preloads from the start position ----
-            case SPIN_UP_1:
-                if (shooter.isReady()) {
-                    enter(State.SHOOT_1);
-                }
-                break;
-
-            case SHOOT_1:
-                if (shotFinished()) {
-                    enter(State.DRIVE_TO_FLOWER_1);
-                }
-                break;
-
-            // ---- Collect from the lower flower ----
-            case DRIVE_TO_FLOWER_1:
-                if (pathFinished(Timing.PATH_TIMEOUT_SECONDS)) {
-                    enter(State.INTAKE_FLOWER_1_FORWARD);
-                }
-                break;
-
-            case INTAKE_FLOWER_1_FORWARD:
-                if (pathFinished(Timing.CREEP_TIMEOUT_SECONDS)) {
-                    enter(State.INTAKE_FLOWER_1_BACK);
-                }
-                break;
-
-            case INTAKE_FLOWER_1_BACK:
-                if (creepBackFinished()) {
-                    enter(State.DRIVE_TO_SHOOT_POSITION_2);
-                }
-                break;
-
-            // ---- Shot 2: at the hive from shooting position 2 ----
-            case DRIVE_TO_SHOOT_POSITION_2:
-                if (pathFinished(Timing.PATH_TIMEOUT_SECONDS) && shooter.isReady()) {
-                    enter(State.SHOOT_2);
-                }
-                break;
-
-            case SHOOT_2:
-                if (shotFinished()) {
-                    enter(State.DRIVE_TO_FLOWER_2);
-                }
-                break;
-
-            // ---- Collect from the second flower ----
-            case DRIVE_TO_FLOWER_2:
-                if (pathFinished(Timing.PATH_TIMEOUT_SECONDS)) {
-                    enter(State.INTAKE_FLOWER_2_FORWARD);
-                }
-                break;
-
-            case INTAKE_FLOWER_2_FORWARD:
-                if (pathFinished(Timing.CREEP_TIMEOUT_SECONDS)) {
-                    enter(State.INTAKE_FLOWER_2_BACK);
-                }
-                break;
-
-            case INTAKE_FLOWER_2_BACK:
-                if (creepBackFinished()) {
-                    enter(State.RETURN_TO_SHOOT_POSITION_2);
-                }
-                break;
-
-            // ---- Shot 3: back at shooting position 2 ----
-            case RETURN_TO_SHOOT_POSITION_2:
-                if (pathFinished(Timing.PATH_TIMEOUT_SECONDS) && shooter.isReady()) {
-                    enter(State.SHOOT_3);
-                }
-                break;
-
-            case SHOOT_3:
-                if (shotFinished()) {
-                    enter(State.DONE);
-                }
-                break;
-
-            case DONE:
-            default:
-                // Nothing left to do; the follower holds the last pose.
-                break;
-        }
-
+        follower.update();
+        Scheduler.execute();
         intake.update();
         shooter.update();
-        follower.update();
         PoseStorage.lastAutoPose = follower.pose();
 
         writeTelemetry();
@@ -256,6 +162,7 @@ public class MainAutonomous extends OpMode {
      */
     @Override
     public void stop() {
+        Scheduler.reset();
         if (intake != null) {
             intake.stop();
             intake.update();
@@ -268,6 +175,115 @@ public class MainAutonomous extends OpMode {
             PoseStorage.lastAutoPose = follower.pose();
             follower.stop();
         }
+    }
+
+    // ---- Ivy Command Helpers ----
+
+    /**
+     * Starts the intake motor.
+     */
+    private Command runIntake() {
+        return instant(intake::intake);
+    }
+
+    /**
+     * Stops the intake motor.
+     */
+    private Command stopIntake() {
+        return instant(intake::stop);
+    }
+
+    /**
+     * Follows a path with a safety timeout so an untuned robot does not
+     * stall for the rest of autonomous.
+     */
+    private Command followWithTimeout(Path path, int timeoutMs) {
+        return race(
+                follow(follower, path),
+                waitMs(timeoutMs)
+        );
+    }
+
+    /**
+     * Spins up the shooter, waits until it reaches target speed (or spin-up
+     * timeout), opens the feed servo + runs the intake for {@code SHOOT_SECONDS},
+     * then closes the feed and stops the intake and shooter.
+     */
+    private Command shootCommand(String stepName) {
+        int shootMs = (int) (RobotConstants.Shooter.SHOOT_SECONDS * 1000.0);
+        return sequential(
+                instant(() -> {
+                    currentStep = stepName + " (SPIN UP)";
+                    shooter.spinUp();
+                }),
+                waitUntil(shooter::isReady),
+                instant(() -> {
+                    currentStep = stepName;
+                    openFeed();
+                }),
+                runIntake(),
+                waitMs(shootMs),
+                instant(this::closeFeed),
+                stopIntake(),
+                instant(shooter::stop)
+        );
+    }
+
+    /**
+     * Collects balls from a flower: creeps forward while intaking, then
+     * creeps back while waiting at least {@code INTAKE_SETTLE_MS} so the
+     * last ball settles inside before driving off.
+     */
+    private Command collectFlower(String stepName, Path creepForward, Path creepBack) {
+        return sequential(
+                instant(() -> currentStep = stepName + " FORWARD"),
+                runIntake(),
+                followWithTimeout(creepForward, Timing.CREEP_TIMEOUT_MS),
+                instant(() -> currentStep = stepName + " BACK"),
+                parallel(
+                        followWithTimeout(creepBack, Timing.CREEP_TIMEOUT_MS),
+                        waitMs(Timing.INTAKE_SETTLE_MS)
+                ),
+                stopIntake()
+        );
+    }
+
+    /**
+     * Full match autonomous sequence composed with Ivy.
+     */
+    private Command autoRoutine() {
+        return sequential(
+                // 1. Shoot preloaded balls from start position
+                shootCommand("SHOOT_1"),
+
+                // 2. Drive to lower flower and collect
+                instant(() -> currentStep = "DRIVE_TO_FLOWER_1"),
+                followWithTimeout(toFlower1, Timing.PATH_TIMEOUT_MS),
+                collectFlower("FLOWER_1", flower1Forward, flower1Back),
+
+                // 3. Drive to shooting position 2 while spinning up, then shoot
+                instant(() -> {
+                    currentStep = "DRIVE_TO_SHOOT_POSITION_2";
+                    shooter.spinUp();
+                }),
+                followWithTimeout(flower1ToShootPosition2, Timing.PATH_TIMEOUT_MS),
+                shootCommand("SHOOT_2"),
+
+                // 4. Drive to second flower and collect
+                instant(() -> currentStep = "DRIVE_TO_FLOWER_2"),
+                followWithTimeout(toFlower2, Timing.PATH_TIMEOUT_MS),
+                collectFlower("FLOWER_2", flower2Forward, flower2Back),
+
+                // 5. Return to shooting position 2 while spinning up, then shoot
+                instant(() -> {
+                    currentStep = "RETURN_TO_SHOOT_POSITION_2";
+                    shooter.spinUp();
+                }),
+                followWithTimeout(flower2ToShootPosition2, Timing.PATH_TIMEOUT_MS),
+                shootCommand("SHOOT_3"),
+
+                instant(() -> currentStep = "DONE")
+        );
     }
 
     /**
@@ -321,115 +337,6 @@ public class MainAutonomous extends OpMode {
                 .with(Constants.foresightConfig.maxPathSpeed.at(FLOWER_CREEP_SPEED));
     }
 
-    /**
-     * Switches state, restarts the state timer, and kicks off whatever
-     * that state needs: a path, the flywheel, the intake, the feed.
-     *
-     * @param next state to enter
-     */
-    private void enter(State next) {
-        state = next;
-        stateTimer.reset();
-
-        switch (next) {
-            case SPIN_UP_1:
-                shooter.spinUp();
-                break;
-
-            case SHOOT_1:
-            case SHOOT_2:
-            case SHOOT_3:
-                shooter.spinUp();
-                openFeed();
-                // The intake pushes balls up into the feed while shooting.
-                intake.intake();
-                break;
-
-            case DRIVE_TO_FLOWER_1:
-                closeFeed();
-                intake.stop();
-                shooter.stop();
-                follower.follow(toFlower1);
-                break;
-
-            case INTAKE_FLOWER_1_FORWARD:
-                intake.intake();
-                follower.follow(flower1Forward);
-                break;
-
-            case INTAKE_FLOWER_1_BACK:
-                follower.follow(flower1Back);
-                break;
-
-            case DRIVE_TO_SHOOT_POSITION_2:
-                intake.stop();
-                // Spin up during the drive so the shot is ready on arrival.
-                shooter.spinUp();
-                follower.follow(flower1ToShootPosition2);
-                break;
-
-            case DRIVE_TO_FLOWER_2:
-                closeFeed();
-                intake.stop();
-                shooter.stop();
-                follower.follow(toFlower2);
-                break;
-
-            case INTAKE_FLOWER_2_FORWARD:
-                intake.intake();
-                follower.follow(flower2Forward);
-                break;
-
-            case INTAKE_FLOWER_2_BACK:
-                follower.follow(flower2Back);
-                break;
-
-            case RETURN_TO_SHOOT_POSITION_2:
-                intake.stop();
-                // Spin up during the drive so the shot is ready on arrival.
-                shooter.spinUp();
-                follower.follow(flower2ToShootPosition2);
-                break;
-
-            case DONE:
-                closeFeed();
-                intake.stop();
-                shooter.stop();
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    /**
-     * @param timeoutSeconds how long to wait before giving up on the path
-     * @return {@code true} once the follower reaches the end of the current
-     *         path, or the timeout expires
-     */
-    private boolean pathFinished(double timeoutSeconds) {
-        return !follower.isBusy() || stateTimer.seconds() >= timeoutSeconds;
-    }
-
-    /**
-     * The creep-back is done when the path ends and the intake has had a
-     * moment to settle the last ball.
-     *
-     * @return {@code true} when it is safe to leave the flower
-     */
-    private boolean creepBackFinished() {
-        return pathFinished(Timing.CREEP_TIMEOUT_SECONDS)
-                && stateTimer.seconds() >= Timing.INTAKE_SETTLE_SECONDS;
-    }
-
-    /**
-     * @return {@code true} once the feed has been open long enough for
-     *         every ball on board to fire
-     */
-    private boolean shotFinished() {
-        return stateTimer.seconds() >= RobotConstants.Shooter.SHOOT_SECONDS;
-    }
-
     private void openFeed() {
         feedServo.setPosition(RobotConstants.Servo.POSITION_B);
     }
@@ -444,8 +351,7 @@ public class MainAutonomous extends OpMode {
     private void writeTelemetry() {
         Pose pose = follower.pose();
         telemetry.addData("Alliance", alliance);
-        telemetry.addData("State", state);
-        telemetry.addData("State time (s)", "%.1f", stateTimer.seconds());
+        telemetry.addData("Step", currentStep);
         telemetry.addData("Match time (s)", "%.1f", matchTimer.seconds());
         telemetry.addData("X (in)", "%.1f", pose.x());
         telemetry.addData("Y (in)", "%.1f", pose.y());
