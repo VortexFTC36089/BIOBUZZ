@@ -146,10 +146,10 @@ public final class RobotConstants {
      */
     public static final class PedroPoints {
         // TODO(team): replace these placeholder poses with measured field locations
-        public static final Pose START = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose START = new Pose(56.0, 8.0, Math.toRadians(0.0));
         public static final Pose HOME = new Pose(0.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE = new Pose(24.0, 24.0, Math.toRadians(90.0));
-        public static final Pose PARK = new Pose(48.0, 24.0, Math.toRadians(90.0));
+        public static final Pose PARK = new Pose(5.0, 100.0, Math.toRadians(90.0));
     }
 
     /**
@@ -239,5 +239,26 @@ public final class RobotConstants {
          * How close actual RPM must be to target to count as ready to shoot.
          */
         public static final double RPM_TOLERANCE = 100.0;
+
+        /**
+         * Flywheel speed autonomous uses for every shot via
+         * {@code ShooterSubsystem.spinUp()}.
+         */
+        // TODO(team): tune for the autonomous shooting positions
+        public static final double AUTO_RPM = 3800.0;
+
+        /**
+         * Longest autonomous waits for the flywheel to reach speed before
+         * firing anyway.
+         */
+        // TODO(team): tune on the robot
+        public static final double SPINUP_SECONDS = 1.5;
+
+        /**
+         * How long autonomous keeps the feed open so every ball on board
+         * fires.
+         */
+        // TODO(team): tune on the robot
+        public static final double SHOOT_SECONDS = 2.0;
     }
 }

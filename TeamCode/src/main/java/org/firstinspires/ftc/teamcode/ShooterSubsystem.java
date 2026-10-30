@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 /**
  * Single-motor flywheel shooter with velocity control.
@@ -13,6 +14,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  * loop. Like the intake, {@link #stop()} only changes state; {@code update()}
  * writes the motor.
  *
+ * <p>Autonomous can instead call {@link #spinUp()} while driving and wait for
+ * {@link #isReady()} before firing.
+ *
  * <p>Hardware: one {@link DcMotorEx} with an encoder named
  * {@link RobotConstants.Shooter#MOTOR}.
  */
@@ -20,6 +24,7 @@ public class ShooterSubsystem {
 
     private final DcMotorEx motor;
     private double targetRpm;
+    private final ElapsedTime spinTimer = new ElapsedTime();
 
     /**
      * Finds the shooter motor and puts it in velocity mode.
@@ -49,7 +54,19 @@ public class ShooterSubsystem {
      * @param rpm target output RPM; 0 stops the flywheel
      */
     public void setTargetRpm(double rpm) {
+        if (targetRpm <= 0.0 && rpm > 0.0) {
+            // Starting from stopped: time the spin-up for isReady().
+            spinTimer.reset();
+        }
         targetRpm = rpm;
+    }
+
+    /**
+     * Spins up to {@link RobotConstants.Shooter#AUTO_RPM}. Calling it again
+     * while already spinning does not restart the spin-up timer.
+     */
+    public void spinUp() {
+        setTargetRpm(RobotConstants.Shooter.AUTO_RPM);
     }
 
     /**
@@ -100,6 +117,25 @@ public class ShooterSubsystem {
     public boolean atSpeed() {
         return targetRpm > 0.0
                 && Math.abs(getCurrentRpm() - targetRpm) <= RobotConstants.Shooter.RPM_TOLERANCE;
+    }
+
+    /**
+     * Ready to fire: at speed, or spinning for at least
+     * {@link RobotConstants.Shooter#SPINUP_SECONDS} so autonomous never waits
+     * forever on a wheel that can't quite reach its target.
+     *
+     * @return {@code true} when it is OK to feed a ball
+     */
+    public boolean isReady() {
+        return atSpeed()
+                || (targetRpm > 0.0 && spinTimer.seconds() >= RobotConstants.Shooter.SPINUP_SECONDS);
+    }
+
+    /**
+     * @return whether the wheel is commanded on
+     */
+    public boolean isSpinning() {
+        return targetRpm > 0.0;
     }
 
     /**

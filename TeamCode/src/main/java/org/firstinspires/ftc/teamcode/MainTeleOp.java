@@ -62,7 +62,12 @@ public class MainTeleOp extends OpMode {
     @Override
     public void init() {
         follower = Constants.create(hardwareMap);
-        follower.setPose(RobotConstants.PedroPoints.START);
+
+        // Pick up where autonomous left off so hive aim and field-centric
+        // know the real field pose. Without an auto run, use START.
+        boolean poseFromAuto = PoseStorage.lastAutoPose != null;
+        follower.setPose(poseFromAuto ? PoseStorage.lastAutoPose : RobotConstants.PedroPoints.START);
+
         intake = new IntakeSubsystem(hardwareMap);
         shooter = new ShooterSubsystem(hardwareMap);
 
@@ -70,6 +75,7 @@ public class MainTeleOp extends OpMode {
         aimingAtHive = false;
 
         telemetry.addLine("Main TeleOp ready");
+        telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
         telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
