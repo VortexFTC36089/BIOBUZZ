@@ -148,4 +148,93 @@ public final class RobotConstants {
         public static final double HOME_Y_INCHES = 0.0;
         public static final double HOME_HEADING_RADIANS = 0.0;
     }
+
+    /**
+     * Hive (goal) positions and the heading lock that aims the chassis at them.
+     *
+     * <p>Pedro field coordinates: inches, +X forward, +Y left. There is one
+     * hive on each side of the field. When the robot's Y is at or above
+     * {@link #FIELD_MIDLINE_Y_INCHES} it aims at the left hive, otherwise the
+     * right hive.
+     */
+    public static final class Hive {
+        // TODO(team): measure both hive centers in Pedro coordinates
+        public static final double LEFT_HIVE_X_INCHES = 132.0;
+        public static final double LEFT_HIVE_Y_INCHES = 132.0;
+        public static final double RIGHT_HIVE_X_INCHES = 132.0;
+        public static final double RIGHT_HIVE_Y_INCHES = 12.0;
+
+        /**
+         * Y value that splits the field into the left and right halves.
+         */
+        // TODO(team): set to the real midline (72 on a 0-144 field)
+        public static final double FIELD_MIDLINE_Y_INCHES = 72.0;
+
+        /**
+         * Added to the robot-to-hive angle. 0 if the shooter fires out the
+         * front of the robot, {@code Math.PI} if it fires out the back.
+         */
+        public static final double SHOOTER_HEADING_OFFSET_RADIANS = 0.0;
+
+        /**
+         * Turn power per radian of heading error while aiming.
+         *
+         * <p>If the robot spins away from the hive instead of toward it, make
+         * this negative.
+         */
+        // TODO(team): tune; raise until it snaps on, lower if it oscillates
+        public static final double AIM_KP = 1.2;
+
+        /**
+         * Damping on the heading lock. Raise a little if the robot overshoots
+         * and wobbles around the hive; leave at 0 if it settles cleanly.
+         */
+        // TODO(team): tune after AIM_KP
+        public static final double AIM_KD = 0.0;
+
+        /**
+         * Most turn power the heading lock may command, in {@code [0, 1]}.
+         */
+        public static final double AIM_MAX_TURN = 0.7;
+
+        /**
+         * Heading error under which the robot counts as aimed.
+         */
+        public static final double AIM_TOLERANCE_RADIANS = Math.toRadians(2.0);
+    }
+
+    /**
+     * Flywheel shooter that picks its speed from the distance to the hive.
+     */
+    public static final class Shooter {
+        public static final String MOTOR = "shooter";
+
+        /**
+         * Encoder ticks per output revolution. 28 is a bare goBILDA/REV
+         * motor; multiply by the gear ratio if there is a gearbox.
+         */
+        // TODO(team): set for the real shooter motor
+        public static final double TICKS_PER_REV = 28.0;
+
+        /**
+         * Distance-to-RPM table. Distances are inches from robot center to
+         * hive center, ascending. RPM is linearly interpolated between rows
+         * and clamped at both ends.
+         *
+         * <p>The first row is the base shot: robot against the wall,
+         * perpendicular to the hive, at 3800 RPM.
+         *
+         * <p>To tune: park at each distance, adjust that row's RPM until shots
+         * land, then add rows where shots miss in between.
+         */
+        // TODO(team): replace 24.0 with the "Hive distance (in)" telemetry
+        //  reading while parked at the wall spot, then tune the farther rows
+        public static final double[] DISTANCES_INCHES = {24.0, 48.0, 72.0, 96.0, 120.0};
+        public static final double[] RPMS = {3800.0, 4100.0, 4400.0, 4700.0, 5000.0};
+
+        /**
+         * How close actual RPM must be to target to count as ready to shoot.
+         */
+        public static final double RPM_TOLERANCE = 100.0;
+    }
 }
