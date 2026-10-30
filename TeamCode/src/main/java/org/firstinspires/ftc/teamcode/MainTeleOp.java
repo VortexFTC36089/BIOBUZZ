@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.pedropathing.controllers.Controller;
+import com.pedropathing.controllers.PIDController;
 import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.pedropathing.utils.Angle;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -37,6 +40,17 @@ public class MainTeleOp extends OpMode {
     private boolean fieldCentric;
     private boolean intakeLatched;
     private boolean drivingToHome;
+    private boolean aimingAtHive;
+
+    private ShooterSubsystem shooter;
+    private double hiveDistanceInches;
+    private double aimErrorRadians;
+
+    /**
+     * Pedro PID that turns heading error into turn power while aiming.
+     */
+    private final PIDController aimController = Controller.pid(
+            RobotConstants.Hive.AIM_KP, 0.0, RobotConstants.Hive.AIM_KD);
 
     private double lastLoopNanos;
 
@@ -50,13 +64,16 @@ public class MainTeleOp extends OpMode {
         follower = Constants.create(hardwareMap);
         follower.setPose(RobotConstants.PedroPoints.START);
         intake = new IntakeSubsystem(hardwareMap);
+        shooter = new ShooterSubsystem(hardwareMap);
 
         drivingToHome = false;
+        aimingAtHive = false;
 
         telemetry.addLine("Main TeleOp ready");
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
-        telemetry.addLine("RT intake  |  LT reverse  ");
+        telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
+        telemetry.addLine("B = toggle servo A/B  |  RB hold = aim at hive + spin shooter");
         telemetry.update();
     }
 
@@ -107,6 +124,25 @@ public class MainTeleOp extends OpMode {
             drivingToHome = false;
         }
 
+        // ---- Aim at hive ----
+        // RB held: the left stick still translates, but heading is locked onto
+        // the hive on our half of the field and the shooter RPM follows the
+        // distance. Released: shooter spins down, right stick turns again.
+        boolean aimHeld = gamepad1.right_bumper;
+        if (aimHeld && !aimingAtHive) {
+            // Fresh press: clear the derivative so old error doesn't kick.
+            aimController.reset();
+        }
+        aimingAtHive = aimHeld;
+        updateHiveAim();
+        if (aimingAtHive) {
+            drivingToHome = false;
+            turn = aimTurnPower();
+            shooter.setTargetFromDistance(hiveDistanceInches);
+        } else {
+            shooter.stop();
+        }
+
         // ---- Drive ----
         if (drivingToHome) {
             if (!follower.isBusy()) {
@@ -121,6 +157,7 @@ public class MainTeleOp extends OpMode {
 
         // ---- Hardware write ----
         intake.update();
+        shooter.update();
         follower.update();
 
         // ---- Telemetry ----
@@ -135,6 +172,10 @@ public class MainTeleOp extends OpMode {
         if (intake != null) {
             intake.stop();
             intake.update();
+        }
+        if (shooter != null) {
+            shooter.stop();
+            shooter.update();
         }
         if (follower != null) {
             follower.manual(0.0, 0.0, 0.0);
@@ -154,6 +195,39 @@ public class MainTeleOp extends OpMode {
         Path homePath = line(follower.pose(), home).linear(follower.pose(), home);
         follower.follow(homePath);
         drivingToHome = true;
+    }
+
+    /**
+     * Uses the Pedro follower's pose to pick the hive on our half of the
+     * field, then stores Pedro's distance to it and the heading error to
+     * face it.
+     */
+    private void updateHiveAim() {
+        Pose robot = follower.pose();
+
+        boolean leftHalf = robot.y() >= RobotConstants.Hive.FIELD_MIDLINE_Y_INCHES;
+        Pose hive = leftHalf
+                ? new Pose(RobotConstants.Hive.LEFT_HIVE_X_INCHES, RobotConstants.Hive.LEFT_HIVE_Y_INCHES)
+                : new Pose(RobotConstants.Hive.RIGHT_HIVE_X_INCHES, RobotConstants.Hive.RIGHT_HIVE_Y_INCHES);
+
+        hiveDistanceInches = robot.distance(hive);
+
+        // Field angle from robot to hive (Pedro: 0 = +X, counterclockwise positive).
+        double targetHeading = hive.toVector2D().minus(robot.toVector2D()).theta()
+                + RobotConstants.Hive.SHOOTER_HEADING_OFFSET_RADIANS;
+        aimErrorRadians = Angle.error(robot.heading(), targetHeading);
+    }
+
+    /**
+     * Heading lock through Pedro's PID. Positive turn is counterclockwise,
+     * matching Pedro's heading, so positive error turns toward the hive.
+     *
+     * @return turn power in [-AIM_MAX_TURN, AIM_MAX_TURN]
+     */
+    private double aimTurnPower() {
+        double max = RobotConstants.Hive.AIM_MAX_TURN;
+        double power = aimController.calculate(0.0, aimErrorRadians);
+        return Math.max(-max, Math.min(max, power));
     }
 
     /**
@@ -223,6 +297,12 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
+        boolean aimed = Math.abs(aimErrorRadians) <= RobotConstants.Hive.AIM_TOLERANCE_RADIANS;
+        telemetry.addData("Hive aim", !aimingAtHive ? "OFF" : aimed ? "AIMED" : "TURNING");
+        telemetry.addData("Hive distance (in)", hiveDistanceInches);
+        telemetry.addData("Aim error (deg)", Math.toDegrees(aimErrorRadians));
+        telemetry.addData("Shooter RPM", "%.0f / %.0f", shooter.getCurrentRpm(), shooter.getTargetRpm());
+        telemetry.addData("Ready to shoot", aimingAtHive && aimed && shooter.atSpeed());
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();
     }
