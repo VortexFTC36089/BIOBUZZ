@@ -176,7 +176,7 @@ Docs: https://pedropathing.com/docs/pathing/tuning/foresight
 - [ ] **Tests → Curve** if you will use curves
 - [ ] `Main TeleOp`: robot-centric, field-centric, heading reset
 - [ ] Measure a real start pose (inches + heading)
-- [ ] Replace `RobotConstants.Field.HOME_*` if you use **Y**
+- [ ] Replace `RobotConstants.PedroPoints.HOME` if you use **Y**
 - [ ] Confirm intake direction on real game pieces
 
 ---
