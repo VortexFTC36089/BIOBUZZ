@@ -7,6 +7,7 @@ import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
@@ -30,15 +31,20 @@ public class MainTeleOp extends OpMode {
     private Follower follower;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
+    private Servo servo;
 
     private final ToggleButton fieldCentricToggle = new ToggleButton();
     private final ToggleButton intakeLatchToggle = new ToggleButton();
     private final ToggleButton homeToggle = new ToggleButton();
-    private final ToggleButton gateToggle = new ToggleButton();
+    private final ToggleButton speedUpToggle = new ToggleButton();
+    private final ToggleButton speedDownToggle = new ToggleButton();
+    private final ToggleButton servoToggle = new ToggleButton();
 
     private boolean fieldCentric;
     private boolean intakeLatched;
     private boolean drivingToHome;
+    private boolean servoAtPositionB;
+    private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
     private double lastLoopNanos;
 
@@ -60,13 +66,14 @@ public class MainTeleOp extends OpMode {
         outtake = new OuttakeSubsystem(hardwareMap);
 
         drivingToHome = false;
+        speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
         telemetry.addLine("Main TeleOp ready");
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
-        telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
-        telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
-        telemetry.addLine("RB hold = outtake motor  |  B = toggle outtake gate");
+        telemetry.addLine("Dpad Up/Down = speed +/-  |  X = field-centric  |  Back = reset heading");
+        telemetry.addLine("RT intake  |  LT reverse  |  A hold = transfer  |  Y drive home");
+        telemetry.addLine("RB hold = outtake motor  |  B = toggle servo A/B");
         telemetry.update();
     }
 
@@ -94,12 +101,25 @@ public class MainTeleOp extends OpMode {
         double strafe = -gamepad1.left_stick_x;
         double turn = -gamepad1.right_stick_x;
 
-        boolean slowMode = false;
-        if (slowMode) {
-            forward *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
-            strafe *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
-            turn *= RobotConstants.Drive.SLOW_MODE_MULTIPLIER;
+        // Adjust speed multiplier with D-pad Up (+10%) and D-pad Down (-10%).
+        if (speedUpToggle.update(gamepad1.dpad_up)) {
+            speedMultiplier = Math.min(
+                    RobotConstants.Drive.MAX_SPEED_MULTIPLIER,
+                    speedMultiplier + RobotConstants.Drive.SPEED_STEP
+            );
         }
+        if (speedDownToggle.update(gamepad1.dpad_down)) {
+            speedMultiplier = Math.max(
+                    RobotConstants.Drive.MIN_SPEED_MULTIPLIER,
+                    speedMultiplier - RobotConstants.Drive.SPEED_STEP
+            );
+        }
+
+        boolean slowMode = false;
+        double activeSpeed = slowMode ? RobotConstants.Drive.SLOW_MODE_MULTIPLIER : speedMultiplier;
+        forward *= activeSpeed;
+        strafe *= activeSpeed;
+        turn *= activeSpeed;
 
         // Back (not Start) so we do not fight the Driver Station's Start
         // "emergency" habit. Sets heading to 0 while keeping x/y, so
@@ -215,36 +235,39 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Triggers are momentary. A latches continuous intake. Reverse wins if
-     * both triggers are held so a stuck latch can still spit a jam.
+     * Triggers control the intake motor momentarily, and holding A runs the
+     * transfer motor independently.
      */
     private void updateIntakeFromGamepad() {
-
-        boolean reverseHeld = gamepad1.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
-        boolean intakeHeld = gamepad1.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
+        boolean reverseHeld = gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
+        boolean intakeHeld = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
 
         if (reverseHeld) {
             intake.reverse();
-        } else if (intakeHeld || intakeLatched) {
+        } else if (intakeHeld) {
             intake.intake();
         } else {
-            intake.stop();
+            intake.stopIntake();
+        }
+
+        if (gamepad2.a) {
+            intake.transfer();
+        }
+        else if(gamepad2.y){
+            intake.reverseTransfer();
+        }else {
+            intake.stopTransfer();
         }
     }
 
     /**
-     * Right bumper holds the outtake motor on; B toggles the servo gate
-     * between closed and open.
+     * Right bumper holds the outtake motor on.
      */
     private void updateOuttakeFromGamepad() {
-        if (gamepad1.right_bumper) {
+        if (gamepad2.right_bumper) {
             outtake.outtake();
         } else {
             outtake.stopMotor();
-        }
-
-        if (gateToggle.update(gamepad1.b)) {
-            outtake.toggleGate();
         }
     }
 
@@ -263,12 +286,14 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Y (in)", pose.y());
         telemetry.addData("Heading (deg)", Math.toDegrees(pose.heading()));
         telemetry.addData("Drive mode", fieldCentric ? "FIELD" : "ROBOT");
+        telemetry.addData("Drive speed", "%.0f%%", speedMultiplier * 100.0);
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
+        telemetry.addData("Transfer", intake.getTransferState());
         telemetry.addData("Outtake Motor", outtake.getMotorState());
         telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
                 outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
-        telemetry.addData("Outtake Gate", outtake.getGateState());
+        telemetry.addData("Servo", servoAtPositionB ? "POSITION_B" : "POSITION_A");
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();

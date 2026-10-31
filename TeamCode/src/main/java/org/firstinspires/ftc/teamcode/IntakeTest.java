@@ -4,10 +4,11 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 /**
- * Spins only the intake so you can check wiring and direction.
+ * Spins the intake and transfer motors independently so you can check wiring
+ * and direction.
  *
- * <p>Hold right trigger to intake, left trigger to reverse. If "intake"
- * spits pieces out, flip {@code IntakeSubsystem} motor direction.
+ * <p>Hold right trigger to intake, left trigger to reverse intake, and hold A
+ * to run the transfer motor.
  */
 @TeleOp(name = "Test: Intake", group = RobotConstants.OpModeGroups.TEST)
 public class IntakeTest extends OpMode {
@@ -15,17 +16,17 @@ public class IntakeTest extends OpMode {
     private IntakeSubsystem intake;
 
     /**
-     * Connects to the intake motor only.
+     * Connects to the intake and transfer motors.
      */
     @Override
     public void init() {
         intake = new IntakeSubsystem(hardwareMap);
-        telemetry.addLine("RT = intake, LT = reverse");
+        telemetry.addLine("RT = intake, LT = reverse intake, A = transfer");
         telemetry.update();
     }
 
     /**
-     * Applies trigger commands and shows the resulting state.
+     * Applies trigger and button commands and shows the resulting states.
      */
     @Override
     public void loop() {
@@ -34,16 +35,23 @@ public class IntakeTest extends OpMode {
         } else if (gamepad1.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
             intake.intake();
         } else {
-            intake.stop();
+            intake.stopIntake();
+        }
+
+        if (gamepad1.a) {
+            intake.transfer();
+        } else {
+            intake.stopTransfer();
         }
 
         intake.update();
-        telemetry.addData("State", intake.getState());
+        telemetry.addData("Intake State", intake.getState());
+        telemetry.addData("Transfer State", intake.getTransferState());
         telemetry.update();
     }
 
     /**
-     * Makes sure the roller cannot keep spinning after the OpMode ends.
+     * Makes sure both motors stop spinning after the OpMode ends.
      */
     @Override
     public void stop() {

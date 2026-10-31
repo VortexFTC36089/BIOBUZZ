@@ -6,13 +6,15 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
- * Intake and transfer subsystem.
+ * Intake and transfer subsystem with independent control of the intake and
+ * transfer motors.
  *
- * <p>OpModes should call {@link #intake()}, {@link #reverse()},
- * {@link #stop()}, or {@link #toggleIntake()} from gamepad handlers, then
- * call {@link #update()} once per loop so the intake and transfer motor powers
- * always match {@link IntakeState}. That way {@link #stop()} is always safe:
- * it only changes state, and {@code update()} is what actually writes power.
+ * <p>OpModes should call {@link #intake()}, {@link #reverse()}, or
+ * {@link #stopIntake()} for the intake motor, and {@link #transfer()},
+ * {@link #reverseTransfer()}, or {@link #stopTransfer()} for the transfer
+ * motor, then call {@link #update()} once per loop so motor powers always
+ * match the requested states. {@link #stop()} stops both motors and is always
+ * safe to call from OpMode {@code stop()}.
  *
  * <p>Hardware:
  * <ul>
@@ -23,7 +25,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 public class IntakeSubsystem {
 
     /**
-     * What the intake and transfer are trying to do this loop.
+     * What the intake motor is doing this loop.
      */
     public enum IntakeState {
         OFF,
@@ -31,9 +33,19 @@ public class IntakeSubsystem {
         REVERSING
     }
 
+    /**
+     * What the transfer motor is doing this loop.
+     */
+    public enum TransferState {
+        OFF,
+        TRANSFERRING,
+        REVERSING
+    }
+
     private final DcMotorEx motor;
     private final DcMotorEx transferMotor;
     private IntakeState state;
+    private TransferState transferState;
 
     /**
      * Finds the intake and transfer motors and puts both in a known-safe configuration.
@@ -57,12 +69,16 @@ public class IntakeSubsystem {
         transferMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         state = IntakeState.OFF;
+        transferState = TransferState.OFF;
         motor.setPower(0.0);
         transferMotor.setPower(0.0);
     }
 
+    // ---- Intake Motor Controls ----
+
     /**
-     * Starts pulling game elements in with both the intake and transfer motors.
+     * Starts pulling game elements in with the intake motor at
+     * {@link RobotConstants.Intake#INTAKE_POWER}.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -71,7 +87,8 @@ public class IntakeSubsystem {
     }
 
     /**
-     * Starts pushing game elements out with both the intake and transfer motors.
+     * Starts pushing game elements out with the intake motor at
+     * {@link RobotConstants.Intake#OUTTAKE_POWER}.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -80,32 +97,70 @@ public class IntakeSubsystem {
     }
 
     /**
-     * Requests zero power on both intake and transfer motors. Always safe to
-     * call, including from {@code stop()}.
+     * Stops only the intake motor while leaving the transfer motor state unchanged.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
-    public void stop() {
+    public void stopIntake() {
         state = IntakeState.OFF;
     }
 
     /**
-     * Toggles between {@link IntakeState#INTAKING} and {@link IntakeState#OFF}.
-     *
-     * <p>If the intake is reversing, a toggle goes to OFF so one press always
-     * means "stop whatever is happening" instead of jumping to intake.
+     * Toggles the intake motor between {@link IntakeState#INTAKING} and {@link IntakeState#OFF}.
      */
     public void toggleIntake() {
         if (state == IntakeState.INTAKING) {
-            stop();
+            stopIntake();
         } else {
             intake();
         }
     }
 
+    // ---- Transfer Motor Controls ----
+
     /**
-     * Writes motor powers for the current state to both the intake and transfer
-     * motors.
+     * Runs the transfer motor forward at
+     * {@link RobotConstants.Intake#TRANSFER_INTAKE_POWER}.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void transfer() {
+        transferState = TransferState.TRANSFERRING;
+    }
+
+    /**
+     * Runs the transfer motor in reverse at
+     * {@link RobotConstants.Intake#TRANSFER_REVERSE_POWER}.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void reverseTransfer() {
+        transferState = TransferState.REVERSING;
+    }
+
+    /**
+     * Stops only the transfer motor while leaving the intake motor state unchanged.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void stopTransfer() {
+        transferState = TransferState.OFF;
+    }
+
+    /**
+     * Requests zero power on both intake and transfer motors. Always safe to
+     * call, including from OpMode {@code stop()}.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void stop() {
+        state = IntakeState.OFF;
+        transferState = TransferState.OFF;
+    }
+
+    /**
+     * Writes motor powers for the current states to the intake and transfer
+     * motors independently.
      *
      * <p>Call once per OpMode loop. Powers come from {@link RobotConstants}
      * so TeleOp never hardcodes a number.</p>
@@ -114,26 +169,41 @@ public class IntakeSubsystem {
         switch (state) {
             case INTAKING:
                 motor.setPower(RobotConstants.Intake.INTAKE_POWER);
-                transferMotor.setPower(RobotConstants.Intake.TRANSFER_INTAKE_POWER);
                 break;
             case REVERSING:
                 motor.setPower(RobotConstants.Intake.OUTTAKE_POWER);
-                transferMotor.setPower(RobotConstants.Intake.TRANSFER_REVERSE_POWER);
                 break;
             case OFF:
             default:
                 motor.setPower(0.0);
+                break;
+        }
+
+        switch (transferState) {
+            case TRANSFERRING:
+                transferMotor.setPower(RobotConstants.Intake.TRANSFER_INTAKE_POWER);
+                break;
+            case REVERSING:
+                transferMotor.setPower(RobotConstants.Intake.TRANSFER_REVERSE_POWER);
+                break;
+            case OFF:
+            default:
                 transferMotor.setPower(0.0);
                 break;
         }
     }
 
     /**
-     * Current requested state. Useful for telemetry.
-     *
-     * @return OFF, INTAKING, or REVERSING
+     * @return current requested intake motor state ({@code OFF}, {@code INTAKING}, or {@code REVERSING})
      */
     public IntakeState getState() {
         return state;
+    }
+
+    /**
+     * @return current requested transfer motor state ({@code OFF}, {@code TRANSFERRING}, or {@code REVERSING})
+     */
+    public TransferState getTransferState() {
+        return transferState;
     }
 }

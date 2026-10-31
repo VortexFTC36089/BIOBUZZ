@@ -17,7 +17,7 @@ import com.pedropathing.math.Pose;
  *   <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
  *   <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
  *   <li>One outtake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code outtake}</li>
- *   <li>One outtake gate {@link com.qualcomm.robotcore.hardware.Servo}: {@code servo}</li>
+ *   <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code servo}</li>
  *   <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
  */
@@ -65,6 +65,15 @@ public final class RobotConstants {
         public static final double SLOW_MODE_MULTIPLIER = 0.30;
 
         /**
+         * Starting speed multiplier and step size when adjusting drive speed
+         * with D-pad Up / D-pad Down.
+         */
+        public static final double DEFAULT_SPEED_MULTIPLIER = 1.00;
+        public static final double SPEED_STEP = 0.10;
+        public static final double MIN_SPEED_MULTIPLIER = 0.20;
+        public static final double MAX_SPEED_MULTIPLIER = 1.00;
+
+        /**
          * Stick magnitude that counts as "the driver is moving" when we cancel
          * an automated drive-to-pose.
          *
@@ -99,7 +108,7 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.70;
+        public static final double INTAKE_POWER = 0.90;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
@@ -113,13 +122,13 @@ public final class RobotConstants {
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 0.70;
+        public static final double TRANSFER_INTAKE_POWER = 0.60;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -0.80;
+        public static final double TRANSFER_REVERSE_POWER = -0.70;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -131,17 +140,12 @@ public final class RobotConstants {
     }
 
     /**
-     * Hardware map names, flywheel RPM settings, and servo gate positions for
-     * the outtake mechanism.
+     * Hardware map name and flywheel RPM settings for the outtake mechanism.
      *
-     * <p>The outtake motor uses encoder velocity control to hold a target RPM,
-     * and the servo gate uses positions in {@code [0.0, 1.0]}. The gate starts
-     * closed at {@code init()} so game elements stay held until the driver
-     * opens the gate.
+     * <p>The outtake motor uses encoder velocity control to hold a target RPM.
      */
     public static final class Outtake {
         public static final String MOTOR = "outtake";
-        public static final String GATE_SERVO = "servo";
 
         /**
          * Encoder ticks per output revolution. 28 is a bare goBILDA/REV
@@ -154,7 +158,7 @@ public final class RobotConstants {
          * Target flywheel RPM used while spinning up to score/eject pieces.
          */
         // TODO(team): tune target RPM so pieces score cleanly
-        public static final double TARGET_RPM = 3800.0;
+        public static final double TARGET_RPM = 2100.0;
 
         /**
          * How close actual RPM must be to target to count as at speed.
@@ -162,26 +166,41 @@ public final class RobotConstants {
         public static final double RPM_TOLERANCE = 100.0;
 
         /**
-         * Servo position when the gate is closed (blocking game pieces).
-         * Used at init so the mechanism starts closed.
+         * Velocity PIDF coefficients applied to the outtake motor in
+         * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
+         *
+         * <p>For a flywheel, feedforward ({@code F}) does most of the work to hold
+         * steady-state RPM, and proportional ({@code P}) helps recover speed quickly
+         * after a game piece is launched.
          */
-        // TODO(team): measure closed gate position on the robot
-        public static final double GATE_CLOSED_POSITION = 0.0;
-
-        /**
-         * Servo position when the gate is open (releasing game pieces).
-         */
-        // TODO(team): measure open gate position on the robot
-        public static final double GATE_OPEN_POSITION = 1.0;
+        // TODO(team): tune velocity PIDF gains on the robot
+        public static final double KP = 50.0;
+        public static final double KI = 0.0;
+        public static final double KD = 1.0;
+        public static final double KF = 50.0;
     }
 
     /**
-     * Two-position servo constants retained as aliases for the outtake gate.
+     * Two-position servo (claw, hood, flap, etc.).
+     *
+     * <p>Servo positions are unitless in {@code [0.0, 1.0]}. 0.0 and 1.0
+     * are the mechanical ends of travel; measure the two poses you actually
+     * want and put them here.
      */
     public static final class Servo {
-        public static final String NAME = Outtake.GATE_SERVO;
-        public static final double POSITION_A = Outtake.GATE_CLOSED_POSITION;
-        public static final double POSITION_B = Outtake.GATE_OPEN_POSITION;
+        public static final String NAME = "flower";
+
+        /**
+         * First pose. Used at init so the mechanism starts in a known place.
+         */
+        // TODO(team): measure this on the robot
+        public static final double POSITION_A = 0.0;
+
+        /**
+         * Second pose.
+         */
+        // TODO(team): measure this on the robot
+        public static final double POSITION_B = .5;
     }
 
     /**

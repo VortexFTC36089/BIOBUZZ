@@ -25,7 +25,6 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Intake | Motor | `intake` |
 | Transfer | Motor | `transfer` |
 | Outtake | Motor | `outtake` |
-| Outtake gate servo | Servo | `servo` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
 Pinpoint wiring (from Pedro docs):
@@ -107,8 +106,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Back | Reset heading to 0 (keeps x/y) |
 | Right trigger | Intake while held |
 | Left trigger | Reverse while held |
-| A | Latch continuous intake on/off |
-| B | Toggle outtake servo gate open/closed |
+| A (hold) | Run transfer motor |
 | Y | Follow a line to the home pose (cancels if you move a stick) |
 
 Stick signs follow Pedro’s TeleOp guide: `-left_y`, `+left_x`, `+right_x`.

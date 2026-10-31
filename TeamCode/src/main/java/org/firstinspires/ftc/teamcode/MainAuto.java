@@ -77,24 +77,37 @@ public class MainAuto extends OpMode {
     // ---- Ivy Mechanism Commands ----
 
     /**
-     * Starts both the intake and transfer motors.
+     * Starts the intake motor.
      */
     private Command runIntake() {
         return instant(intake::intake);
     }
 
     /**
-     * Stops both the intake and transfer motors.
+     * Stops the intake motor.
      */
     private Command stopIntake() {
-        return instant(intake::stop);
+        return instant(intake::stopIntake);
+    }
+
+    /**
+     * Starts the transfer motor.
+     */
+    private Command runTransfer() {
+        return instant(intake::transfer);
+    }
+
+    /**
+     * Stops the transfer motor.
+     */
+    private Command stopTransfer() {
+        return instant(intake::stopTransfer);
     }
 
     /**
      * Spins the outtake motor up to {@link RobotConstants.Outtake#TARGET_RPM},
-     * waits until it reaches speed (with a timeout safety net), opens the servo
-     * gate while feeding with the intake/transfer, then closes the gate and
-     * stops the motors.
+     * waits until it reaches speed (with a timeout safety net), feeds with the
+     * transfer motor, then stops the transfer and outtake motors.
      */
     private Command scoreOuttake() {
         return sequential(
@@ -103,11 +116,9 @@ public class MainAuto extends OpMode {
                         waitUntil(outtake::atSpeed),
                         waitMs(SPINUP_TIMEOUT_MS)
                 ),
-                instant(outtake::openGate),
-                runIntake(),
+                runTransfer(),
                 waitMs(SCORE_DURATION_MS),
-                instant(outtake::closeGate),
-                stopIntake(),
+                stopTransfer(),
                 instant(outtake::stopMotor)
         );
     }
@@ -178,9 +189,9 @@ public class MainAuto extends OpMode {
         telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(pose.heading()));
         telemetry.addData("Follower Mode", follower.mode());
         telemetry.addData("Intake", intake.getState());
+        telemetry.addData("Transfer", intake.getTransferState());
         telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
                 outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
-        telemetry.addData("Outtake Gate", outtake.getGateState());
         telemetry.update();
     }
 
