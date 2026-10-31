@@ -13,7 +13,9 @@ package org.firstinspires.ftc.teamcode;
  *   <li>Four mecanum drive motors: {@code frontLeft}, {@code frontRight},
  *       {@code backLeft}, {@code backRight}</li>
  *   <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
- *   <li>One two-position servo named {@code servo}</li>
+ *   <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
+ *   <li>One outtake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code outtake}</li>
+ *   <li>One outtake gate {@link com.qualcomm.robotcore.hardware.Servo}: {@code servo}</li>
  *   <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
  */
@@ -81,7 +83,7 @@ public final class RobotConstants {
     }
 
     /**
-     * Hardware map name and power values for the single-motor intake.
+     * Hardware map names and power values for the intake and transfer motors.
      *
      * <p>Powers are unitless motor commands in {@code [-1.0, 1.0]}. Positive
      * vs negative is a hardware convention; we treat positive as "intake"
@@ -89,19 +91,33 @@ public final class RobotConstants {
      */
     public static final class Intake {
         public static final String MOTOR = "intake";
+        public static final String TRANSFER_MOTOR = "transfer";
 
         /**
-         * Power used while pulling game elements in.
+         * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
         public static final double INTAKE_POWER = 0.70;
 
         /**
-         * Power used while reversing / outtaking. Negative of intake by
-         * default so one sign convention is easy to flip later.
+         * Power used on the intake motor while reversing / outtaking.
+         * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
         public static final double OUTTAKE_POWER = -0.80;
+
+        /**
+         * Power used on the transfer motor while pulling game elements in
+         * with the intake.
+         */
+        // TODO(team): tune transfer intake speed on the robot
+        public static final double TRANSFER_INTAKE_POWER = 0.70;
+
+        /**
+         * Power used on the transfer motor while reversing / ejecting.
+         */
+        // TODO(team): tune transfer reverse speed on the robot
+        public static final double TRANSFER_REVERSE_POWER = -0.80;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -113,26 +129,50 @@ public final class RobotConstants {
     }
 
     /**
-     * Two-position servo (claw, hood, flap, etc.).
+     * Hardware map names, motor powers, and servo gate positions for the
+     * outtake mechanism.
      *
-     * <p>Servo positions are unitless in {@code [0.0, 1.0]}. 0.0 and 1.0
-     * are the mechanical ends of travel; measure the two poses you actually
-     * want and put them here.
+     * <p>Motor powers are unitless in {@code [-1.0, 1.0]} and servo positions
+     * are unitless in {@code [0.0, 1.0]}. The gate starts closed at {@code init()}
+     * so game elements stay held until the driver opens the gate.
+     */
+    public static final class Outtake {
+        public static final String MOTOR = "outtake";
+        public static final String GATE_SERVO = "servo";
+
+        /**
+         * Power used while running the outtake motor to score/eject pieces.
+         */
+        // TODO(team): tune so pieces score cleanly
+        public static final double OUTTAKE_POWER = 0.80;
+
+        /**
+         * Power used while reversing the outtake motor to clear a jam.
+         */
+        // TODO(team): tune reverse power on the robot
+        public static final double REVERSE_POWER = -0.50;
+
+        /**
+         * Servo position when the gate is closed (blocking game pieces).
+         * Used at init so the mechanism starts closed.
+         */
+        // TODO(team): measure closed gate position on the robot
+        public static final double GATE_CLOSED_POSITION = 0.0;
+
+        /**
+         * Servo position when the gate is open (releasing game pieces).
+         */
+        // TODO(team): measure open gate position on the robot
+        public static final double GATE_OPEN_POSITION = 1.0;
+    }
+
+    /**
+     * Two-position servo constants retained as aliases for the outtake gate.
      */
     public static final class Servo {
-        public static final String NAME = "servo";
-
-        /**
-         * First pose. Used at init so the mechanism starts in a known place.
-         */
-        // TODO(team): measure this on the robot
-        public static final double POSITION_A = 0.0;
-
-        /**
-         * Second pose.
-         */
-        // TODO(team): measure this on the robot
-        public static final double POSITION_B = 1.0;
+        public static final String NAME = Outtake.GATE_SERVO;
+        public static final double POSITION_A = Outtake.GATE_CLOSED_POSITION;
+        public static final double POSITION_B = Outtake.GATE_OPEN_POSITION;
     }
 
     /**

@@ -29,10 +29,12 @@ public class MainTeleOp extends OpMode {
 
     private Follower follower;
     private IntakeSubsystem intake;
+    private OuttakeSubsystem outtake;
 
     private final ToggleButton fieldCentricToggle = new ToggleButton();
     private final ToggleButton intakeLatchToggle = new ToggleButton();
     private final ToggleButton homeToggle = new ToggleButton();
+    private final ToggleButton gateToggle = new ToggleButton();
 
     private boolean fieldCentric;
     private boolean intakeLatched;
@@ -49,6 +51,7 @@ public class MainTeleOp extends OpMode {
     public void init() {
         follower = Constants.create(hardwareMap);
         intake = new IntakeSubsystem(hardwareMap);
+        outtake = new OuttakeSubsystem(hardwareMap);
 
         drivingToHome = false;
 
@@ -56,7 +59,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
         telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
-        telemetry.addLine("B = toggle servo A/B");
+        telemetry.addLine("RB hold = outtake motor  |  B = toggle outtake gate");
         telemetry.update();
     }
 
@@ -119,8 +122,12 @@ public class MainTeleOp extends OpMode {
         // ---- Intake ----
         updateIntakeFromGamepad();
 
+        // ---- Outtake ----
+        updateOuttakeFromGamepad();
+
         // ---- Hardware write ----
         intake.update();
+        outtake.update();
         follower.update();
 
         // ---- Telemetry ----
@@ -135,6 +142,10 @@ public class MainTeleOp extends OpMode {
         if (intake != null) {
             intake.stop();
             intake.update();
+        }
+        if (outtake != null) {
+            outtake.stop();
+            outtake.update();
         }
         if (follower != null) {
             follower.manual(0.0, 0.0, 0.0);
@@ -210,6 +221,22 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
+     * Right bumper holds the outtake motor on; B toggles the servo gate
+     * between closed and open.
+     */
+    private void updateOuttakeFromGamepad() {
+        if (gamepad1.right_bumper) {
+            outtake.outtake();
+        } else {
+            outtake.stopMotor();
+        }
+
+        if (gateToggle.update(gamepad1.b)) {
+            outtake.toggleGate();
+        }
+    }
+
+    /**
      * One telemetry.update() per loop, as required by the Driver Station.
      *
      * @param slowMode whether the slow-mode bumper is held this loop
@@ -226,6 +253,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Drive mode", fieldCentric ? "FIELD" : "ROBOT");
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
+        telemetry.addData("Outtake Motor", outtake.getMotorState());
+        telemetry.addData("Outtake Gate", outtake.getGateState());
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();
