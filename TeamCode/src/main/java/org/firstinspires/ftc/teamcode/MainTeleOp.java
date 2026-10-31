@@ -50,12 +50,19 @@ public class MainTeleOp extends OpMode {
     @Override
     public void init() {
         follower = Constants.create(hardwareMap);
+
+        // Pick up the pose where autonomous ended so TeleOp knows where the
+        // robot is on the field. If no auto has run yet, fall back to START_POSE.
+        boolean poseFromAuto = PoseStorage.lastAutoPose != null;
+        follower.setPose(poseFromAuto ? PoseStorage.lastAutoPose : RobotConstants.Field.START_POSE);
+
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
 
         drivingToHome = false;
 
         telemetry.addLine("Main TeleOp ready");
+        telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("LB hold = slow  |  X = field-centric  |  Back = reset heading");
         telemetry.addLine("RT intake  |  LT reverse  |  A latch intake  |  Y drive home");
@@ -114,6 +121,7 @@ public class MainTeleOp extends OpMode {
         if (drivingToHome) {
             if (!follower.isBusy()) {
                 drivingToHome = false;
+                follower.manual(0.0, 0.0, 0.0);
             }
         } else {
             commandManualDrive(forward, strafe, turn);
@@ -154,19 +162,23 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Starts a straight line to the placeholder home pose.
+     * Starts a straight line from the robot's current pose to
+     * {@link RobotConstants.Field#SCORE_POSE}.
      *
-     * <p>Pedro coordinates: x/y inches, heading radians. The pose in
-     * {@link RobotConstants.Field} is a TODO until you measure a real spot.
+     * <p>If the robot is already at {@code SCORE_POSE}, a zero-length line path
+     * cannot be constructed, so it simply holds the score pose instead.
      */
     private void startDriveToHome() {
-        Pose home = new Pose(
-                RobotConstants.Field.HOME_X_INCHES,
-                RobotConstants.Field.HOME_Y_INCHES,
-                RobotConstants.Field.HOME_HEADING_RADIANS
-        );
-        // TODO(team): replace HOME_* with a real field pose after Pinpoint is tuned
-        Path homePath = line(follower.pose(), home).linear(follower.pose(), home);
+        Pose current = follower.pose();
+        Pose home = RobotConstants.Field.SCORE_POSE;
+
+        if (current.distance(home) < 0.5) {
+            follower.hold(home);
+            drivingToHome = false;
+            return;
+        }
+
+        Path homePath = line(current, home).linear(current, home);
         follower.follow(homePath);
         drivingToHome = true;
     }
@@ -254,6 +266,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Outtake Motor", outtake.getMotorState());
+        telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
+                outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
         telemetry.addData("Outtake Gate", outtake.getGateState());
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);

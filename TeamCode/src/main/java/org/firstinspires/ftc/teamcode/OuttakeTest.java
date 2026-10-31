@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 /**
  * Tests the outtake motor and servo gate in isolation.
  *
- * <p>Hold right bumper to run the outtake motor, left bumper to reverse it,
- * and press B to toggle the servo gate between closed and open.
+ * <p>Hold right bumper to spin the outtake motor up to target RPM, and press B
+ * to toggle the servo gate between closed and open.
  */
 @TeleOp(name = "Test: Outtake", group = RobotConstants.OpModeGroups.TEST)
 public class OuttakeTest extends OpMode {
@@ -21,7 +21,7 @@ public class OuttakeTest extends OpMode {
     @Override
     public void init() {
         outtake = new OuttakeSubsystem(hardwareMap);
-        telemetry.addLine("RB = outtake motor, LB = reverse motor, B = toggle gate");
+        telemetry.addLine("RB = outtake motor, B = toggle gate");
         telemetry.update();
     }
 
@@ -30,9 +30,7 @@ public class OuttakeTest extends OpMode {
      */
     @Override
     public void loop() {
-        if (gamepad1.left_bumper) {
-            outtake.reverse();
-        } else if (gamepad1.right_bumper) {
+        if (gamepad1.right_bumper) {
             outtake.outtake();
         } else {
             outtake.stopMotor();
@@ -44,6 +42,8 @@ public class OuttakeTest extends OpMode {
 
         outtake.update();
         telemetry.addData("Motor State", outtake.getMotorState());
+        telemetry.addData("Outtake RPM", "%.0f / %.0f", outtake.getCurrentRpm(), outtake.getTargetRpm());
+        telemetry.addData("At Speed", outtake.atSpeed());
         telemetry.addData("Gate State", outtake.getGateState());
         telemetry.update();
     }

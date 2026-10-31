@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.pedropathing.math.Pose;
+
 /**
  * Single place for hardware map names and non-Pedro tunable values.
  *
@@ -129,28 +131,35 @@ public final class RobotConstants {
     }
 
     /**
-     * Hardware map names, motor powers, and servo gate positions for the
-     * outtake mechanism.
+     * Hardware map names, flywheel RPM settings, and servo gate positions for
+     * the outtake mechanism.
      *
-     * <p>Motor powers are unitless in {@code [-1.0, 1.0]} and servo positions
-     * are unitless in {@code [0.0, 1.0]}. The gate starts closed at {@code init()}
-     * so game elements stay held until the driver opens the gate.
+     * <p>The outtake motor uses encoder velocity control to hold a target RPM,
+     * and the servo gate uses positions in {@code [0.0, 1.0]}. The gate starts
+     * closed at {@code init()} so game elements stay held until the driver
+     * opens the gate.
      */
     public static final class Outtake {
         public static final String MOTOR = "outtake";
         public static final String GATE_SERVO = "servo";
 
         /**
-         * Power used while running the outtake motor to score/eject pieces.
+         * Encoder ticks per output revolution. 28 is a bare goBILDA/REV
+         * motor; multiply by the gear ratio if there is a gearbox.
          */
-        // TODO(team): tune so pieces score cleanly
-        public static final double OUTTAKE_POWER = 0.80;
+        // TODO(team): set for the real outtake motor / gearbox
+        public static final double TICKS_PER_REV = 28.0;
 
         /**
-         * Power used while reversing the outtake motor to clear a jam.
+         * Target flywheel RPM used while spinning up to score/eject pieces.
          */
-        // TODO(team): tune reverse power on the robot
-        public static final double REVERSE_POWER = -0.50;
+        // TODO(team): tune target RPM so pieces score cleanly
+        public static final double TARGET_RPM = 3800.0;
+
+        /**
+         * How close actual RPM must be to target to count as at speed.
+         */
+        public static final double RPM_TOLERANCE = 100.0;
 
         /**
          * Servo position when the gate is closed (blocking game pieces).
@@ -176,16 +185,19 @@ public final class RobotConstants {
     }
 
     /**
-     * Optional "drive here" pose used by TeleOp automation.
+     * Optional "drive here" pose used by TeleOp automation and autonomous
+     * waypoints for Pedro Pathing.
      *
-     * <p>Pedro reports position in inches and heading in radians. These
-     * defaults are placeholders so the code compiles; they are not a real
-     * field location.
+     * <p>Pedro reports position in inches and heading in radians (+X forward,
+     * +Y left, counterclockwise positive). These defaults are placeholders so
+     * the code compiles; they are not real field locations.
      */
     public static final class Field {
-        // TODO(team): replace with a measured field pose after localization is tuned
-        public static final double HOME_X_INCHES = 0.0;
-        public static final double HOME_Y_INCHES = 0.0;
-        public static final double HOME_HEADING_RADIANS = 0.0;
+        // TODO(team): replace with measured field poses after localization is tuned
+        public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose START_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
+        public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
+        public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));
     }
 }

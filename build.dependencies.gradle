@@ -21,5 +21,6 @@ dependencies {
     // Docs still show tuning:1.0.0; Quickstart uses 1.0.1, which we follow.
     implementation 'com.pedropathing:revhub:3.0.2'
     implementation 'com.pedropathing:tuning:1.0.0'
+    implementation 'com.pedropathing.ivy:pedro:1.1.1'
 }
 
