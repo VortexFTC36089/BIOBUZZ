@@ -71,8 +71,8 @@ public final class Constants {
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
         c.name.set("pinpoint");
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(2.4384011997012642);
-        c.yPodOffset.set(5.275469201756274);
+        c.xPodOffset.set(3.99);// ~~101.357mm got these results using the CAD and The Diagram provided by Pedro Pathing.
+        c.yPodOffset.set(3.76); // ~~95.735mm got these results using the CAD and The Diagram provided by Pedro Pathing.
         c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.globalDistanceUnit.set(DistanceUnit.INCH);
