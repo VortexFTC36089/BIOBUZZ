@@ -76,6 +76,11 @@ public class MainTeleOp extends OpMode {
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
 
+        // Two-position servo, toggled with Gamepad 1 A. Start at POSITION_A.
+        servo = hardwareMap.get(Servo.class, RobotConstants.Servo.NAME);
+        servoAtPositionB = false;
+        servo.setPosition(RobotConstants.Servo.POSITION_A);
+
         // Turret aims continuously using the follower's pose. Start on the
         // default (High Goal) target in TRACKING mode. Skipped entirely while
         // TURRET_ENABLED is false.
@@ -97,6 +102,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  Back = reset heading  |  Y drive home");
+        telemetry.addLine("G1: A = toggle servo A/B");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake");
         if (TURRET_ENABLED) {
@@ -175,6 +181,14 @@ public class MainTeleOp extends OpMode {
             }
         } else {
             commandManualDrive(forward, strafe, turn);
+        }
+
+        // ---- Two-position servo (Gamepad 1 A toggles) ----
+        if (servoToggle.update(gamepad1.a)) {
+            servoAtPositionB = !servoAtPositionB;
+            servo.setPosition(servoAtPositionB
+                    ? RobotConstants.Servo.POSITION_B
+                    : RobotConstants.Servo.POSITION_A);
         }
 
         // ---- Intake ----

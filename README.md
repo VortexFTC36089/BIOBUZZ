@@ -104,6 +104,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Right stick X | Turn |
 | Dpad Up / Down | Drive speed +10% / -10% |
 | Back | Reset heading to 0 (keeps x/y) |
+| A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` |
 | Y | Follow a line to the home pose (cancels if you move a stick) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
