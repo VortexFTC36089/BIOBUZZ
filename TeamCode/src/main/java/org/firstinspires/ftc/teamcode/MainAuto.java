@@ -52,6 +52,7 @@ public class MainAuto extends OpMode {
     private static final int SCORE_DURATION_MS = 800;
 
     private Follower follower;
+    private TurretSubsystem turret;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
 
@@ -105,6 +106,24 @@ public class MainAuto extends OpMode {
     }
 
     /**
+     * Points the turret at a field coordinate and makes sure it is tracking.
+     * The actual aiming happens continuously in {@link #loop()}.
+     */
+    private Command aimTurretAt(double xInches, double yInches) {
+        return instant(() -> {
+            turret.setTargetCoordinate(xInches, yInches);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        });
+    }
+
+    /**
+     * Returns the turret to its starting angle (e.g. before parking).
+     */
+    private Command homeTurret() {
+        return instant(() -> turret.setMode(TurretSubsystem.TurretMode.HOME));
+    }
+
+    /**
      * Spins the outtake motor up to {@link RobotConstants.Outtake#TARGET_RPM},
      * waits until it reaches speed (with a timeout safety net), feeds with the
      * transfer motor, then stops the transfer and outtake motors.
@@ -139,16 +158,24 @@ public class MainAuto extends OpMode {
                 stopIntake(),
 
                 // 2. Drive to score pose while pre-spinning the outtake to target RPM
+                //    and aiming the turret at the High Goal
                 parallel(
                         follow(follower, pickupToScore()),
-                        instant(outtake::outtake)
+                        instant(outtake::outtake),
+                        aimTurretAt(
+                                RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
+                                RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
+                        )
                 ),
 
-                // 3. Score with outtake RPM + servo gate
+                // 3. Score with outtake RPM (turret keeps tracking while we shoot)
                 scoreOuttake(),
 
-                // 4. Park
-                follow(follower, scoreToPark())
+                // 4. Park with the turret stowed at its starting angle
+                parallel(
+                        follow(follower, scoreToPark()),
+                        homeTurret()
+                )
         );
     }
 
@@ -162,6 +189,13 @@ public class MainAuto extends OpMode {
 
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
+
+        turret = new TurretSubsystem(hardwareMap);
+        turret.setTargetCoordinate(
+                RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
+                RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
+        );
+        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
 
         telemetry.addLine("Main Auto (Ivy) initialized");
         telemetry.addData("Start Pose", startPose);
@@ -182,6 +216,7 @@ public class MainAuto extends OpMode {
         outtake.update();
 
         Pose pose = follower.pose();
+        turret.update(pose);
         PoseStorage.lastAutoPose = pose;
 
         telemetry.addData("X (in)", "%.1f", pose.x());
@@ -192,6 +227,10 @@ public class MainAuto extends OpMode {
         telemetry.addData("Transfer", intake.getTransferState());
         telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
                 outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
+        telemetry.addData("Turret mode", turret.getMode());
+        telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
+        telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",
+                turret.getAngleErrorDegrees(), turret.isOnTarget());
         telemetry.update();
     }
 
@@ -205,6 +244,9 @@ public class MainAuto extends OpMode {
         if (outtake != null) {
             outtake.stop();
             outtake.update();
+        }
+        if (turret != null) {
+            turret.stop();
         }
         if (follower != null) {
             PoseStorage.lastAutoPose = follower.pose();

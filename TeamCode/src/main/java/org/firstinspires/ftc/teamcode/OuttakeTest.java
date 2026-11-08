@@ -36,7 +36,8 @@ public class OuttakeTest extends OpMode {
 
         outtake.update();
         telemetry.addData("Motor State", outtake.getMotorState());
-        telemetry.addData("Outtake RPM", "%.0f / %.0f", outtake.getCurrentRpm(), outtake.getTargetRpm());
+        telemetry.addData("Left RPM", "%.0f / %.0f", outtake.getLeftRpm(), outtake.getTargetRpm());
+        telemetry.addData("Right RPM", "%.0f / %.0f", outtake.getRightRpm(), outtake.getTargetRpm());
         telemetry.addData("At Speed", outtake.atSpeed());
         telemetry.update();
     }

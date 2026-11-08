@@ -28,7 +28,15 @@ import static com.pedropathing.api.Paths.line;
 @TeleOp(name = "Main TeleOp", group = RobotConstants.OpModeGroups.TELEOP)
 public class MainTeleOp extends OpMode {
 
+    /**
+     * Set to {@code true} to build and run the turret in TeleOp. While
+     * {@code false} the turret motor is never touched (no hardware lookup,
+     * no power), so TeleOp runs fine without {@code turretMotor} configured.
+     */
+    private static final boolean TURRET_ENABLED = false;
+
     private Follower follower;
+    private TurretSubsystem turret;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
     private Servo servo;
@@ -39,6 +47,9 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
     private final ToggleButton servoToggle = new ToggleButton();
+    private final ToggleButton turretHighGoalToggle = new ToggleButton();
+    private final ToggleButton turretCenterToggle = new ToggleButton();
+    private final ToggleButton turretHomeToggle = new ToggleButton();
 
     private boolean fieldCentric;
     private boolean intakeLatched;
@@ -65,15 +76,34 @@ public class MainTeleOp extends OpMode {
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
 
+        // Turret aims continuously using the follower's pose. Start on the
+        // default (High Goal) target in TRACKING mode. Skipped entirely while
+        // TURRET_ENABLED is false.
+        if (TURRET_ENABLED) {
+            turret = new TurretSubsystem(hardwareMap);
+            turret.setTargetCoordinate(
+                    RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
+                    RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
+            );
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        } else {
+            turret = null;
+        }
+
         drivingToHome = false;
         speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
         telemetry.addLine("Main TeleOp ready");
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
-        telemetry.addLine("LX/LY drive, RX turn (robot-centric default)");
-        telemetry.addLine("Dpad Up/Down = speed +/-  |  X = field-centric  |  Back = reset heading");
-        telemetry.addLine("RT intake  |  LT reverse  |  A hold = transfer  |  Y drive home");
-        telemetry.addLine("RB hold = outtake motor  |  B = toggle servo A/B");
+        telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
+        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  Back = reset heading  |  Y drive home");
+        telemetry.addLine("G2: RT intake  |  LT reverse  |  A hold = transfer  |  Y hold = rev transfer");
+        telemetry.addLine("G2: RB hold = outtake");
+        if (TURRET_ENABLED) {
+            telemetry.addLine("G2: X = turret HIGH GOAL  |  B = turret CENTER  |  LB = turret HOME");
+        } else {
+            telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
+        }
         telemetry.update();
     }
 
@@ -153,10 +183,19 @@ public class MainTeleOp extends OpMode {
         // ---- Outtake ----
         updateOuttakeFromGamepad();
 
+        // ---- Turret target / override selection ----
+        if (turret != null) {
+            updateTurretFromGamepad();
+        }
+
         // ---- Hardware write ----
         intake.update();
         outtake.update();
         follower.update();
+        // Aim with the freshest localizer pose, every loop, no blocking.
+        if (turret != null) {
+            turret.update(follower.pose());
+        }
 
         // ---- Telemetry ----
         writeTelemetry(slowMode);
@@ -174,6 +213,9 @@ public class MainTeleOp extends OpMode {
         if (outtake != null) {
             outtake.stop();
             outtake.update();
+        }
+        if (turret != null) {
+            turret.stop();
         }
         if (follower != null) {
             follower.manual(0.0, 0.0, 0.0);
@@ -272,6 +314,35 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
+     * Gamepad 2 turret controls. X and B pick the field target the turret
+     * continuously aims at; LB toggles a manual HOME override that parks the
+     * turret at its starting angle regardless of robot pose. Selecting a
+     * target while HOME is active also returns the turret to TRACKING.
+     */
+    private void updateTurretFromGamepad() {
+        if (turretHighGoalToggle.update(gamepad2.x)) {
+            turret.setTargetCoordinate(
+                    RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
+                    RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
+            );
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        }
+        if (turretCenterToggle.update(gamepad2.b)) {
+            turret.setTargetCoordinate(
+                    RobotConstants.Turret.CENTER_TARGET_X_INCHES,
+                    RobotConstants.Turret.CENTER_TARGET_Y_INCHES
+            );
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        }
+        if (turretHomeToggle.update(gamepad2.left_bumper)) {
+            boolean goHome = turret.getMode() != TurretSubsystem.TurretMode.HOME;
+            turret.setMode(goHome
+                    ? TurretSubsystem.TurretMode.HOME
+                    : TurretSubsystem.TurretMode.TRACKING);
+        }
+    }
+
+    /**
      * One telemetry.update() per loop, as required by the Driver Station.
      *
      * @param slowMode whether the slow-mode bumper is held this loop
@@ -291,9 +362,20 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Transfer", intake.getTransferState());
         telemetry.addData("Outtake Motor", outtake.getMotorState());
-        telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
-                outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
+        telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
+                outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
         telemetry.addData("Servo", servoAtPositionB ? "POSITION_B" : "POSITION_A");
+        if (turret != null) {
+            telemetry.addData("Turret mode", turret.getMode());
+            telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
+            telemetry.addData("Turret angle (deg)", "%.1f -> %.1f",
+                    turret.getCurrentAngleDegrees(), turret.getTargetAngleDegrees());
+            telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",
+                    turret.getAngleErrorDegrees(), turret.isOnTarget());
+            telemetry.addData("Turret power", "%.2f", turret.getLastCommandedPower());
+        } else {
+            telemetry.addData("Turret", "DISABLED");
+        }
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();

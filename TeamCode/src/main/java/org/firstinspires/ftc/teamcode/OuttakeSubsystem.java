@@ -6,47 +6,65 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
- * Outtake subsystem consisting of a velocity-controlled outtake motor (RPM).
+ * Dual-motor outtake subsystem using encoder velocity control (RPM).
  *
  * <p>OpModes should call {@link #outtake()} (or {@link #setTargetRpm(double)})
  * or {@link #stopMotor()} / {@link #stop()}, then call {@link #update()} once
  * per loop so hardware outputs always match the requested state. The outtake
- * motor is one-way only and cannot reverse.
+ * motors are one-way only and cannot reverse.
  *
- * <p>Hardware: one {@link DcMotorEx} with an encoder named
- * {@link RobotConstants.Outtake#MOTOR}.
+ * <p>Hardware: two {@link DcMotorEx} motors with encoders named
+ * {@link RobotConstants.Outtake#LEFT_MOTOR} and
+ * {@link RobotConstants.Outtake#RIGHT_MOTOR}.
  */
 public class OuttakeSubsystem {
 
     /**
-     * What the outtake motor is doing this loop.
+     * What the outtake motors are doing this loop.
      */
     public enum MotorState {
         OFF,
         OUTTAKING
     }
 
-    private final DcMotorEx motor;
+    private final DcMotorEx leftMotor;
+    private final DcMotorEx rightMotor;
 
     private MotorState motorState;
     private double targetRpm;
 
     /**
-     * Finds the outtake motor and puts it in a known-safe initial state
-     * (stopped in velocity mode).
+     * Finds both outtake motors and puts them in a known-safe initial state
+     * (stopped in velocity mode with PIDF gains applied).
      *
      * @param hardwareMap FTC hardware map from the running OpMode
      */
     public OuttakeSubsystem(HardwareMap hardwareMap) {
-        motor = hardwareMap.get(DcMotorEx.class, RobotConstants.Outtake.MOTOR);
+        leftMotor = hardwareMap.get(DcMotorEx.class, RobotConstants.Outtake.LEFT_MOTOR);
+        rightMotor = hardwareMap.get(DcMotorEx.class, RobotConstants.Outtake.RIGHT_MOTOR);
 
-        // Float so the flywheel spins down smoothly instead of slamming to a stop.
-        motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        // Float so the flywheels spin down smoothly instead of slamming to a stop.
+        leftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        rightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
-        // TODO(team): verify direction — FORWARD means positive RPM scores/ejects
-        motor.setDirection(DcMotorSimple.Direction.FORWARD);
+        // Dual opposing wheels typically spin opposite motor directions so both
+        // push the game piece forward.
+        // TODO(team): verify directions — positive RPM on both should score/eject
+        leftMotor.setDirection(DcMotorSimple.Direction.FORWARD);
+        rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
+        configureVelocityControl(leftMotor);
+        configureVelocityControl(rightMotor);
+
+        motorState = MotorState.OFF;
+        targetRpm = 0.0;
+
+        leftMotor.setPower(0.0);
+        rightMotor.setPower(0.0);
+    }
+
+    private void configureVelocityControl(DcMotorEx motor) {
         motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motor.setVelocityPIDFCoefficients(
@@ -55,15 +73,10 @@ public class OuttakeSubsystem {
                 RobotConstants.Outtake.KD,
                 RobotConstants.Outtake.KF
         );
-
-        motorState = MotorState.OFF;
-        targetRpm = 0.0;
-
-        motor.setPower(0.0);
     }
 
     /**
-     * Spins the outtake motor up to {@link RobotConstants.Outtake#TARGET_RPM}.
+     * Spins both outtake motors up to {@link RobotConstants.Outtake#TARGET_RPM}.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -72,7 +85,7 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Spins the outtake motor up to a specific non-negative RPM. Negative
+     * Spins both outtake motors up to a specific non-negative RPM. Negative
      * values are clamped to {@code 0.0} so the outtake never reverses.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
@@ -90,7 +103,7 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Requests zero RPM on the outtake motor.
+     * Requests zero RPM on both outtake motors.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -99,7 +112,7 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Stops the outtake motor. Always safe to call from OpMode {@code stop()}.
+     * Stops both outtake motors. Always safe to call from OpMode {@code stop()}.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -108,15 +121,18 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Writes motor velocity (ticks/sec) for the current state.
+     * Writes motor velocity (ticks/sec) to both outtake motors for the current state.
      *
      * <p>Call once per OpMode loop.</p>
      */
     public void update() {
         if (motorState == MotorState.OFF || targetRpm <= 0.0) {
-            motor.setPower(0.0);
+            leftMotor.setPower(0.0);
+            rightMotor.setPower(0.0);
         } else {
-            motor.setVelocity(targetRpm * RobotConstants.Outtake.TICKS_PER_REV / 60.0);
+            double ticksPerSec = targetRpm * RobotConstants.Outtake.TICKS_PER_REV / 60.0;
+            leftMotor.setVelocity(ticksPerSec);
+            rightMotor.setVelocity(ticksPerSec);
         }
     }
 
@@ -128,19 +144,34 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * @return measured outtake RPM from the encoder
+     * @return measured RPM of the left outtake motor from its encoder
      */
-    public double getCurrentRpm() {
-        return motor.getVelocity() * 60.0 / RobotConstants.Outtake.TICKS_PER_REV;
+    public double getLeftRpm() {
+        return leftMotor.getVelocity() * 60.0 / RobotConstants.Outtake.TICKS_PER_REV;
     }
 
     /**
-     * @return {@code true} if spinning and within
+     * @return measured RPM of the right outtake motor from its encoder
+     */
+    public double getRightRpm() {
+        return rightMotor.getVelocity() * 60.0 / RobotConstants.Outtake.TICKS_PER_REV;
+    }
+
+    /**
+     * @return average measured outtake RPM across both motors
+     */
+    public double getCurrentRpm() {
+        return (getLeftRpm() + getRightRpm()) / 2.0;
+    }
+
+    /**
+     * @return {@code true} if spinning and both motors are within
      *         {@link RobotConstants.Outtake#RPM_TOLERANCE} of {@link #getTargetRpm()}
      */
     public boolean atSpeed() {
         return targetRpm > 0.0
-                && Math.abs(getCurrentRpm() - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
+                && Math.abs(getLeftRpm() - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE
+                && Math.abs(getRightRpm() - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
     }
 
     /**

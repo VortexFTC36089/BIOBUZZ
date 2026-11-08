@@ -24,7 +24,9 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Back right drive | Motor | `backRight` |
 | Intake | Motor | `intake` |
 | Transfer | Motor | `transfer` |
-| Outtake | Motor | `outtake` |
+| Left outtake | Motor | `outtake_left` |
+| Right outtake | Motor | `outtake_right` |
+| Turret | Motor | `turretMotor` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
 Pinpoint wiring (from Pedro docs):
@@ -94,20 +96,30 @@ Safe order the first time you have a robot: **Test: Drive Directions** → **Tes
 
 Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is tuned. Those move the robot using localization.
 
-### Main TeleOp (gamepad 1)
+### Main TeleOp (gamepad 1 — drive)
 
 | Input | Action |
 |---|---|
 | Left stick | Forward / strafe |
 | Right stick X | Turn |
-| Left bumper (hold) | Slow mode (30%) |
-| Right bumper (hold) | Run outtake motor |
-| X | Toggle field-centric |
+| Dpad Up / Down | Drive speed +10% / -10% |
 | Back | Reset heading to 0 (keeps x/y) |
-| Right trigger | Intake while held |
-| Left trigger | Reverse while held |
-| A (hold) | Run transfer motor |
 | Y | Follow a line to the home pose (cancels if you move a stick) |
+
+### Main TeleOp (gamepad 2 — mechanisms)
+
+| Input | Action |
+|---|---|
+| Right trigger | Intake while held |
+| Left trigger | Reverse intake while held |
+| A (hold) | Run transfer motor |
+| Y (hold) | Reverse transfer motor |
+| Right bumper (hold) | Run outtake motors to target RPM |
+| X | Turret: aim at High Goal (`Turret.DEFAULT_TARGET_*`) |
+| B | Turret: aim at Center / Submersible (`Turret.CENTER_TARGET_*`) |
+| Left bumper | Turret: toggle HOME override (return to starting angle) |
+
+The turret aims continuously from `follower.pose()` every loop in both TeleOp and Auto, so it tracks while the chassis moves.
 
 Stick signs follow Pedro’s TeleOp guide: `-left_y`, `+left_x`, `+right_x`.
 
