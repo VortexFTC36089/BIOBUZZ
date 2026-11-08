@@ -97,10 +97,10 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  Back = reset heading  |  Y drive home");
-        telemetry.addLine("G2: RT intake  |  LT reverse  |  A hold = transfer  |  Y hold = rev transfer");
-        telemetry.addLine("G2: RB hold = outtake");
+        telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
+        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake");
         if (TURRET_ENABLED) {
-            telemetry.addLine("G2: X = turret HIGH GOAL  |  B = turret CENTER  |  LB = turret HOME");
+            telemetry.addLine("G2: Dpad Up = turret HIGH GOAL  |  Dpad Down = turret CENTER  |  LB = turret HOME");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
         }
@@ -277,36 +277,32 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Triggers control the intake motor momentarily, and holding A runs the
-     * transfer motor independently.
+     * Gamepad 2 face buttons: A hold = intake, Y hold = reverse intake,
+     * X hold = transfer, B hold = reverse transfer.
      */
     private void updateIntakeFromGamepad() {
-        boolean reverseHeld = gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
-        boolean intakeHeld = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
-
-        if (reverseHeld) {
+        if (gamepad2.y) {
             intake.reverse();
-        } else if (intakeHeld) {
+        } else if (gamepad2.a) {
             intake.intake();
         } else {
             intake.stopIntake();
         }
 
-        if (gamepad2.a) {
+        if (gamepad2.x) {
             intake.transfer();
-        }
-        else if(gamepad2.y){
+        } else if (gamepad2.b) {
             intake.reverseTransfer();
-        }else {
+        } else {
             intake.stopTransfer();
         }
     }
 
     /**
-     * Right bumper holds the outtake motor on.
+     * Holding the right trigger spins the outtake up to target RPM.
      */
     private void updateOuttakeFromGamepad() {
-        if (gamepad2.right_bumper) {
+        if (gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
             outtake.outtake();
         } else {
             outtake.stopMotor();
@@ -314,20 +310,20 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Gamepad 2 turret controls. X and B pick the field target the turret
+     * Gamepad 2 turret controls. Dpad Up / Down pick the field target the turret
      * continuously aims at; LB toggles a manual HOME override that parks the
      * turret at its starting angle regardless of robot pose. Selecting a
      * target while HOME is active also returns the turret to TRACKING.
      */
     private void updateTurretFromGamepad() {
-        if (turretHighGoalToggle.update(gamepad2.x)) {
+        if (turretHighGoalToggle.update(gamepad2.dpad_up)) {
             turret.setTargetCoordinate(
                     RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
                     RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
             );
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
-        if (turretCenterToggle.update(gamepad2.b)) {
+        if (turretCenterToggle.update(gamepad2.dpad_down)) {
             turret.setTargetCoordinate(
                     RobotConstants.Turret.CENTER_TARGET_X_INCHES,
                     RobotConstants.Turret.CENTER_TARGET_Y_INCHES

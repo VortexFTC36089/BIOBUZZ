@@ -110,13 +110,13 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 
 | Input | Action |
 |---|---|
-| Right trigger | Intake while held |
-| Left trigger | Reverse intake while held |
-| A (hold) | Run transfer motor |
-| Y (hold) | Reverse transfer motor |
-| Right bumper (hold) | Run outtake motors to target RPM |
-| X | Turret: aim at High Goal (`Turret.DEFAULT_TARGET_*`) |
-| B | Turret: aim at Center / Submersible (`Turret.CENTER_TARGET_*`) |
+| A (hold) | Intake |
+| Y (hold) | Reverse intake |
+| X (hold) | Run transfer motor |
+| B (hold) | Reverse transfer motor |
+| Right trigger (hold) | Run outtake motors to target RPM |
+| Dpad Up | Turret: aim at High Goal (`Turret.DEFAULT_TARGET_*`) |
+| Dpad Down | Turret: aim at Center / Submersible (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: toggle HOME override (return to starting angle) |
 
 The turret aims continuously from `follower.pose()` every loop in both TeleOp and Auto, so it tracks while the chassis moves.
