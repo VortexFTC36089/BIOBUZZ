@@ -110,27 +110,27 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.60;
+        public static final double INTAKE_POWER = 1;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -0.60;
+        public static final double OUTTAKE_POWER = -1;
 
         /**
          * Power used on the transfer motor while pulling game elements in
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 0.90;
+        public static final double TRANSFER_INTAKE_POWER = 1;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -0.70;
+        public static final double TRANSFER_REVERSE_POWER = -1 ;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -162,7 +162,7 @@ public final class RobotConstants {
          * Target flywheel RPM used while spinning up to score/eject pieces.
          */
         // TODO(team): tune target RPM so pieces score cleanly
-        public static final double TARGET_RPM = 2300.0;
+        public static final double TARGET_RPM = 1870.0;
 
         /**
          * How close actual RPM must be to target to count as at speed.
@@ -178,10 +178,10 @@ public final class RobotConstants {
          * after a game piece is launched.
          */
         // TODO(team): tune velocity PIDF gains on the robot
-        public static final double KP = 50.0;
+        public static final double KP = 85.0;
         public static final double KI = 0.0;
-        public static final double KD = 1.0;
-        public static final double KF = 10.0;
+        public static final double KD = 2.0;
+        public static final double KF = 15.0;
     }
 
     /**
@@ -296,13 +296,13 @@ public final class RobotConstants {
          * First pose. Used at init so the mechanism starts in a known place.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_A = 0.0;
+        public static final double POSITION_A = 0.1;
 
         /**
          * Second pose.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_B = .5;
+        public static final double POSITION_B = 1;
     }
 
     /**
