@@ -69,7 +69,7 @@ TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
 ├── IntakeTest.java              Intake-only test
 ├── OuttakeTest.java             Outtake motor + servo gate test
 ├── DrivetrainDirectionTest.java Spin one wheel at a time
-├── TurretSubsystemTest.java     Two-servo turret aimed from the Pedro pose
+├── TurretSubsystem.java         Two-servo turret aimed from the Pedro pose
 ├── ShooterRpmCalculator.java    Flywheel RPM from distance to the target
 ├── ToggleButton.java            Press-once helper
 └── pedroPathing/                Constants, Tuning, AutoTune procedures

@@ -22,7 +22,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *       {@link #resetAngle()} re-zeroes the estimate whenever it is physically at home.</li>
  * </ul>
  */
-public class TurretSubsystemTest {
+public class TurretSubsystem {
 
     /**
      * PIDF controller: proportional, integral, derivative, velocity feedforward (kV)
@@ -143,7 +143,7 @@ public class TurretSubsystemTest {
      * The angle estimate starts at 0 here, so the turret must be pointing straight
      * forward (home) when the OpMode is initialized.
      */
-    public TurretSubsystemTest(HardwareMap hardwareMap) {
+    public TurretSubsystem(HardwareMap hardwareMap) {
         leftServo = hardwareMap.get(CRServo.class, RobotConstants.Turret.SERVO_LEFT);
         rightServo = hardwareMap.get(CRServo.class, RobotConstants.Turret.SERVO_RIGHT);
 

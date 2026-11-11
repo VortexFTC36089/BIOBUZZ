@@ -38,7 +38,7 @@ public class MainTeleOp extends OpMode {
     private static final boolean TURRET_ENABLED = true;
 
     private Follower follower;
-    private TurretSubsystemTest turret;
+    private TurretSubsystem turret;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
     private Servo servo;
@@ -89,8 +89,8 @@ public class MainTeleOp extends OpMode {
         // pointing straight forward right now. Skipped entirely while
         // TURRET_ENABLED is false.
         if (TURRET_ENABLED) {
-            turret = new TurretSubsystemTest(hardwareMap);
-            turret.setMode(TurretSubsystemTest.TurretMode.TRACKING);
+            turret = new TurretSubsystem(hardwareMap);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         } else {
             turret = null;
         }
@@ -348,20 +348,20 @@ public class MainTeleOp extends OpMode {
     private void updateTurretFromGamepad() {
         if (turretHiveToggle.update(gamepad2.dpad_up)) {
             turret.setAutoSelectSide(true);
-            turret.setMode(TurretSubsystemTest.TurretMode.TRACKING);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
         if (turretCenterToggle.update(gamepad2.dpad_down)) {
             turret.setTargetCoordinate(
                     RobotConstants.Turret.CENTER_TARGET_X_INCHES,
                     RobotConstants.Turret.CENTER_TARGET_Y_INCHES
             );
-            turret.setMode(TurretSubsystemTest.TurretMode.TRACKING);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
         if (turretHomeToggle.update(gamepad2.left_bumper)) {
-            boolean goHome = turret.getMode() != TurretSubsystemTest.TurretMode.HOME;
+            boolean goHome = turret.getMode() != TurretSubsystem.TurretMode.HOME;
             turret.setMode(goHome
-                    ? TurretSubsystemTest.TurretMode.HOME
-                    : TurretSubsystemTest.TurretMode.TRACKING);
+                    ? TurretSubsystem.TurretMode.HOME
+                    : TurretSubsystem.TurretMode.TRACKING);
         }
     }
 
