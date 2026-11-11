@@ -71,8 +71,8 @@ public final class Constants {
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
         c.name.set("pinpoint");
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(3.99);// ~~101.357mm got these results using the CAD and The Diagram provided by Pedro Pathing.
-        c.yPodOffset.set(3.76); // ~~95.735mm got these results using the CAD and The Diagram provided by Pedro Pathing.
+        c.xPodOffset.set(-3.99);// ~~101.357mm got these results using the CAD and The Diagram provided by Pedro Pathing.
+        c.yPodOffset.set(-3.76); // ~~95.735mm got these results using the CAD and The Diagram provided by Pedro Pathing.
         c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.globalDistanceUnit.set(DistanceUnit.INCH);
@@ -87,32 +87,32 @@ public final class Constants {
      * coefficients and max velocities are robot-specific; inventing them
      * makes autonomous worse, not better. Run Foresight AutoTune and paste
      * the generated block over this config.
-     */
-    public static ForesightConfig foresightConfig = new ForesightConfig(
-            c -> {
-                Controller primaryTranslationalForward = Controller.proportional(0.25855761827667234);
-                Controller secondaryTranslationalForward = Controller.proportional(0.09553013116642914);
-                Controller primaryTranslationalLateral = Controller.proportional(0.33512058956041074);
-                Controller secondaryTranslationalLateral = Controller.proportional(0.12381810325549973);
+     * **/
+     public static ForesightConfig foresightConfig = new ForesightConfig(
+     c -> {
+     Controller primaryTranslationalForward = Controller.proportional(0.26287617346188374);
+     Controller secondaryTranslationalForward = Controller.proportional(0.09712572191344494);
+     Controller primaryTranslationalLateral = Controller.proportional(0.3105739197582306);
+     Controller secondaryTranslationalLateral = Controller.proportional(0.11474876466269116);
 
-                c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
-                c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
+     c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
+     c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
 
-                c.coast.set(Controller.proportionalFeedforward(0.012632365277374725));
-                c.brake.set(Controller.proportionalFeedforward(0.010737510485768516));
+     c.coast.set(Controller.proportionalFeedforward(0.013661479704086217));
+     c.brake.set(Controller.proportionalFeedforward(0.011612257748473284));
 
-                c.headingFeedback.set(Controller.proportional(2.839720243605192));
-                c.headingBrakeCoefficients.set(Vector2D.cartesian(0.052950912521280535, 0.002671715490636686));
+     c.headingFeedback.set(Controller.proportional(3.1479739426861415));
+     c.headingBrakeCoefficients.set(Vector2D.cartesian(0.05214078840919569, 0.0023026737363468835));
 
-                c.linearBrakeCoefficients.set(Matrix.diag(0.0833442027431944, 0.08820629418617004));
-                c.quadraticBrakeCoefficients.set(Matrix.diag(0.0013761201697506244, 9.160001881371594E-4));
+     c.linearBrakeCoefficients.set(Matrix.diag(0.09061771598738731, 0.07903818398034722));
+     c.quadraticBrakeCoefficients.set(Matrix.diag(0.00103683689862695, 9.089479787090924E-4));
 
-                c.maxAchievableForwardVelocity.set(58.472820420319195);
-                c.maxAchievableStrafeVelocity.set(47.87810446980406);
-                c.naturalForwardDeceleration.set(31.565360998735713);
-                c.naturalStrafeDeceleration.set(67.71731876792549);
-            }
-    );
+     c.maxAchievableForwardVelocity.set(73.38570292585572);
+     c.maxAchievableStrafeVelocity.set(59.645555021465086);
+     c.naturalForwardDeceleration.set(37.27240849255145);
+     c.naturalStrafeDeceleration.set(68.0497978573461);
+     }
+     );
 
     /**
      * Builds a follower for this robot using the configs above.

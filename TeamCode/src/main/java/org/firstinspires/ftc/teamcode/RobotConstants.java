@@ -162,8 +162,7 @@ public final class RobotConstants {
          * Target flywheel RPM used while spinning up to score/eject pieces.
          */
         // TODO(team): tune target RPM so pieces score cleanly
-        public static final double TARGET_RPM = 1870.0;
-
+        public static final double TARGET_RPM = 2400;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -178,10 +177,10 @@ public final class RobotConstants {
          * after a game piece is launched.
          */
         // TODO(team): tune velocity PIDF gains on the robot
-        public static final double KP = 85.0;
+        public static final double KP = 80.0;
         public static final double KI = 0.0;
         public static final double KD = 2.0;
-        public static final double KF = 15.0;
+        public static final double KF = 16.0;
     }
 
     /**

@@ -1,257 +1,68 @@
 package org.firstinspires.ftc.teamcode;
 
+import static com.pedropathing.api.Paths.*;
+import com.pedropathing.api.Paths;
+
+import com.pedropathing.api.PoseFactory;
 import com.pedropathing.follower.Follower;
-import com.pedropathing.ivy.Command;
-import com.pedropathing.ivy.Scheduler;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.pedropathing.ivy.Command;
+import com.pedropathing.ivy.Scheduler;
+import static com.pedropathing.ivy.Scheduler.schedule;
+import static com.pedropathing.ivy.commands.Commands.*;
+import static com.pedropathing.ivy.groups.Groups.sequential;
+import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-import static com.pedropathing.api.Paths.line;
-import static com.pedropathing.ivy.Scheduler.schedule;
-import static com.pedropathing.ivy.commands.Commands.instant;
-import static com.pedropathing.ivy.commands.Commands.waitMs;
-import static com.pedropathing.ivy.commands.Commands.waitUntil;
-import static com.pedropathing.ivy.groups.Groups.parallel;
-import static com.pedropathing.ivy.groups.Groups.race;
-import static com.pedropathing.ivy.groups.Groups.sequential;
-import static com.pedropathing.ivy.pedro.PedroCommands.follow;
-
-/**
- * Autonomous OpMode built with Pedro Pathing 3 and Ivy (official command library).
- *
- * <p>Coordinates the mecanum drivetrain ({@link Follower}), intake + transfer
- * ({@link IntakeSubsystem}), and velocity-controlled outtake + servo gate
- * ({@link OuttakeSubsystem}):
- * <ol>
- *   <li>Starts at {@link RobotConstants.Field#START_POSE} and drives to
- *       {@link RobotConstants.Field#PICKUP_POSE} while running the intake and transfer.</li>
- *   <li>Drives to {@link RobotConstants.Field#SCORE_POSE} while spinning the
- *       outtake up to {@link RobotConstants.Outtake#TARGET_RPM}.</li>
- *   <li>Waits until the outtake reaches target RPM, opens the servo gate and runs
- *       the transfer to score, then closes the gate and stops the outtake.</li>
- *   <li>Drives to {@link RobotConstants.Field#PARK_POSE}.</li>
- * </ol>
- */
-@Autonomous(name = "Main Auto (Ivy)", group = RobotConstants.OpModeGroups.AUTO, preselectTeleOp = "Main TeleOp")
-public class MainAuto extends OpMode {
-
-    /**
-     * Maximum time (ms) to wait for the outtake to reach target RPM before
-     * opening the gate anyway so autonomous never stalls indefinitely.
-     */
-    private static final int SPINUP_TIMEOUT_MS = 1500;
-
-    /**
-     * How long (ms) to keep the servo gate open and transfer running while
-     * scoring game pieces.
-     */
-    private static final int SCORE_DURATION_MS = 800;
+@Autonomous(name = "AutoPath", group = "Autonomous")
+public class MainAuto extends LinearOpMode {
 
     private Follower follower;
-    private TurretSubsystem turret;
-    private IntakeSubsystem intake;
-    private OuttakeSubsystem outtake;
 
-    private final Pose startPose = RobotConstants.Field.START_POSE;
-    private final Pose pickupPose = RobotConstants.Field.PICKUP_POSE;
-    private final Pose scorePose = RobotConstants.Field.SCORE_POSE;
-    private final Pose parkPose = RobotConstants.Field.PARK_POSE;
+    private final PoseFactory poseFactory = PoseFactory.degrees();
 
-    // ---- Paths ----
+    private final Pose start = poseFactory.of(56, 8, 90);
+    private final Pose path1 = poseFactory.of(56, 28.059, 180);
 
-    private Path startToPickup() {
-        return line(startPose, pickupPose).linear(startPose, pickupPose);
-    }
-
-    private Path pickupToScore() {
-        return line(pickupPose, scorePose).linear(pickupPose, scorePose);
-    }
-
-    private Path scoreToPark() {
-        return line(scorePose, parkPose).linear(scorePose, parkPose);
-    }
-
-    // ---- Ivy Mechanism Commands ----
-
-    /**
-     * Starts the intake motor.
-     */
-    private Command runIntake() {
-        return instant(intake::intake);
-    }
-
-    /**
-     * Stops the intake motor.
-     */
-    private Command stopIntake() {
-        return instant(intake::stopIntake);
-    }
-
-    /**
-     * Starts the transfer motor.
-     */
-    private Command runTransfer() {
-        return instant(intake::transfer);
-    }
-
-    /**
-     * Stops the transfer motor.
-     */
-    private Command stopTransfer() {
-        return instant(intake::stopTransfer);
-    }
-
-    /**
-     * Points the turret at a field coordinate and makes sure it is tracking.
-     * The actual aiming happens continuously in {@link #loop()}.
-     */
-    private Command aimTurretAt(double xInches, double yInches) {
-        return instant(() -> {
-            turret.setTargetCoordinate(xInches, yInches);
-            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
-        });
-    }
-
-    /**
-     * Returns the turret to its starting angle (e.g. before parking).
-     */
-    private Command homeTurret() {
-        return instant(() -> turret.setMode(TurretSubsystem.TurretMode.HOME));
-    }
-
-    /**
-     * Spins the outtake motor up to {@link RobotConstants.Outtake#TARGET_RPM},
-     * waits until it reaches speed (with a timeout safety net), feeds with the
-     * transfer motor, then stops the transfer and outtake motors.
-     */
-    private Command scoreOuttake() {
+    // Autonomous routine
+    public Command autoRoutine() {
         return sequential(
-                instant(outtake::outtake),
-                race(
-                        waitUntil(outtake::atSpeed),
-                        waitMs(SPINUP_TIMEOUT_MS)
-                ),
-                runTransfer(),
-                waitMs(SCORE_DURATION_MS),
-                stopTransfer(),
-                instant(outtake::stopMotor)
-        );
-    }
-
-    // ---- Autonomous Routine ----
-
-    /**
-     * Full autonomous sequence composed with Ivy's {@code sequential()} and
-     * {@code parallel()} groups.
-     */
-    private Command autoRoutine() {
-        return sequential(
-                // 1. Drive to pickup while intaking and running transfer
-                parallel(
-                        follow(follower, startToPickup()),
-                        runIntake()
-                ),
-                stopIntake(),
-
-                // 2. Drive to score pose while pre-spinning the outtake to target RPM
-                //    and aiming the turret at the High Goal
-                parallel(
-                        follow(follower, pickupToScore()),
-                        instant(outtake::outtake),
-                        aimTurretAt(
-                                RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
-                                RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
-                        )
-                ),
-
-                // 3. Score with outtake RPM (turret keeps tracking while we shoot)
-                scoreOuttake(),
-
-                // 4. Park with the turret stowed at its starting angle
-                parallel(
-                        follow(follower, scoreToPark()),
-                        homeTurret()
-                )
+                follow(follower, path1())
         );
     }
 
     @Override
-    public void init() {
+    public void runOpMode() {
         Scheduler.reset();
-
         follower = Constants.create(hardwareMap);
-        follower.setPose(startPose);
+        follower.setPose(start);
         follower.update();
 
-        intake = new IntakeSubsystem(hardwareMap);
-        outtake = new OuttakeSubsystem(hardwareMap);
-
-        turret = new TurretSubsystem(hardwareMap);
-        turret.setTargetCoordinate(
-                RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
-                RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
-        );
-        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
-
-        telemetry.addLine("Main Auto (Ivy) initialized");
-        telemetry.addData("Start Pose", startPose);
-        telemetry.update();
-    }
-
-    @Override
-    public void start() {
-        Scheduler.reset();
+        waitForStart();
         schedule(autoRoutine());
-    }
 
-    @Override
-    public void loop() {
-        follower.update();
-        Scheduler.execute();
-        intake.update();
-        outtake.update();
-
-        Pose pose = follower.pose();
-        turret.update(pose);
-        PoseStorage.lastAutoPose = pose;
-
-        telemetry.addData("X (in)", "%.1f", pose.x());
-        telemetry.addData("Y (in)", "%.1f", pose.y());
-        telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(pose.heading()));
-        telemetry.addData("Follower Mode", follower.mode());
-        telemetry.addData("Intake", intake.getState());
-        telemetry.addData("Transfer", intake.getTransferState());
-        telemetry.addData("Outtake RPM", "%.0f / %.0f (atSpeed=%b)",
-                outtake.getCurrentRpm(), outtake.getTargetRpm(), outtake.atSpeed());
-        telemetry.addData("Turret mode", turret.getMode());
-        telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
-        telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",
-                turret.getAngleErrorDegrees(), turret.isOnTarget());
-        telemetry.update();
-    }
-
-    @Override
-    public void stop() {
-        Scheduler.reset();
-        if (intake != null) {
-            intake.stop();
-            intake.update();
-        }
-        if (outtake != null) {
-            outtake.stop();
-            outtake.update();
-        }
-        if (turret != null) {
-            turret.stop();
-        }
-        if (follower != null) {
-            PoseStorage.lastAutoPose = follower.pose();
-            follower.manual(0.0, 0.0, 0.0);
+        while (opModeIsActive()) {
             follower.update();
+            Scheduler.execute();
+
+            telemetry.addData("x", follower.pose().x());
+            telemetry.addData("y", follower.pose().y());
+            telemetry.addData("heading", follower.pose().heading());
+
+            if (follower.currentPath() != null) {
+                telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());
+                telemetry.addData("Path number", follower.pathIndex());
+            }
+
+            telemetry.update();
         }
+    }
+
+    public Path path1() {
+        return Paths.line(start, path1).linear(start, path1);
     }
 }
