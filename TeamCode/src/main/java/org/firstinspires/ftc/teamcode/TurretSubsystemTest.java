@@ -1,8 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.math.Pose;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -11,26 +10,23 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 /**
- * Field-centric turret subsystem for the goBILDA Gear-Driven Turret
- * (SKU 3208-0004-0001) driven by a 5203 Series 435 RPM Yellow Jacket Motor,
- * continuously aiming at field coordinates using Pedro Pathing telemetry.
+ * Field-centric turret driven by TWO continuous-rotation servos, continuously
+ * aiming at a field coordinate (the hive) using the Pedro Pathing pose.
  *
- * <h3>Hardware &amp; Specification Summary</h3>
+ * <h3>Hardware</h3>
  * <ul>
- *   <li>Turret: goBILDA Gear-Driven Turret (SKU 3208-0004-0001, 105mm inner bore)</li>
- *   <li>Motor: 5203 Series 435 RPM Yellow Jacket ({@link DcMotorEx} {@code "turretMotor"}, {@code 383.6} ticks/rev)</li>
- *   <li>Gear Reduction: {@code 2.75:1} (64T Hub-Mount Gear) &rarr; {@code 158.18 RPM} ({@code 16.564 rad/s} max)</li>
- *   <li>Total Turret Resolution: {@code 1,054.9 ticks/rev} ({@code 167.89 ticks/rad} | {@code 2.93 ticks/deg})</li>
- *   <li>Control Mode: {@link DcMotor.RunMode#RUN_WITHOUT_ENCODER} with {@link DcMotor.ZeroPowerBehavior#BRAKE}</li>
- *   <li>Closed-Loop Control: Software {@link PIDFController} ({@code kP = 1.2, kI = 0.0, kD = 0.05, kV = 0.0604})</li>
+ *   <li>Two {@link CRServo}s ({@code SERVO_LEFT}, {@code SERVO_RIGHT}) that BOTH push the
+ *       turret in the same direction (set the reversed flags in RobotConstants).</li>
+ *   <li>NO encoder. The turret angle is an ESTIMATE: commanded power x time x a calibrated
+ *       speed. It can drift, so the turret must start pointing straight forward, and
+ *       {@link #resetAngle()} re-zeroes the estimate whenever it is physically at home.</li>
  * </ul>
  */
-public class TurretSubsystem {
+public class TurretSubsystemTest {
 
     /**
-     * FTCLib-style PIDFController supporting proportional ({@code kP}),
-     * integral ({@code kI}), derivative ({@code kD}), velocity feedforward
-     * ({@code kV}), and static feedforward ({@code kF}) terms.
+     * PIDF controller: proportional, integral, derivative, velocity feedforward (kV)
+     * and static feedforward (kF, breakaway power).
      */
     public static class PIDFController {
         private double kP;
@@ -52,15 +48,6 @@ public class TurretSubsystem {
             timer.reset();
         }
 
-        /**
-         * Calculates the control effort for a pre-normalized angular error and
-         * target angular velocity.
-         *
-         * @param angleError           shortest-path angular error in radians
-         * @param targetVelocityRadSec target angular velocity in rad/s
-         * @param kV                   velocity feedforward gain ({@code 1 / 16.564 = 0.0604})
-         * @return unclamped motor command
-         */
         public double calculate(double angleError, double targetVelocityRadSec, double kV) {
             double dt = timer.seconds();
             timer.reset();
@@ -102,39 +89,43 @@ public class TurretSubsystem {
         }
     }
 
-    private final DcMotorEx turretMotor;
+    private final CRServo leftServo;
+    private final CRServo rightServo;
+    private final ElapsedTime estimateTimer = new ElapsedTime();
     private final PIDFController pidfController;
     private final ElapsedTime targetVelTimer = new ElapsedTime();
 
-    /**
-     * High-level turret operating mode.
-     */
+    /** High-level turret operating mode. */
     public enum TurretMode {
         /** Continuously aims at the field target coordinate. */
         TRACKING,
         /** Returns to and holds {@link RobotConstants.Turret#HOME_ANGLE_RADIANS}. */
         HOME,
-        /** Motor unpowered. */
+        /** Servos unpowered. */
         DISABLED
     }
 
     private TurretMode mode = TurretMode.TRACKING;
 
-    // Geometry & encoder resolution (167.89 ticks/rad | 2.93 ticks/deg)
+    // Geometry & servo speed model
     private double xOffsetInches = RobotConstants.Turret.OFFSET_X_INCHES;
     private double yOffsetInches = RobotConstants.Turret.OFFSET_Y_INCHES;
-    private double ticksPerRadian = RobotConstants.Turret.TICKS_PER_RADIAN; // 167.89
+    private double radPerSecAtFullPower = RobotConstants.Turret.RAD_PER_SEC_AT_FULL_POWER;
+    private double estimatedAngleRad = 0.0;
 
-    // Rotation soft limits (bounded to prevent wire binding)
+    // Rotation soft limits (prevent wire binding)
     private boolean useSoftLimits = RobotConstants.Turret.USE_SOFT_LIMITS;
     private double minAngleRadians = RobotConstants.Turret.MIN_ANGLE_RADIANS;
     private double maxAngleRadians = RobotConstants.Turret.MAX_ANGLE_RADIANS;
 
-    // Field target coordinates in Pedro Pathing inches
+    // Field target (hive) in Pedro Pathing inches
     private double targetXInches = RobotConstants.Turret.DEFAULT_TARGET_X_INCHES;
     private double targetYInches = RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES;
 
-    // Velocity feedforward gain (1 / 16.564 rad/s = 0.0604)
+    // The hive has two sides. By default the side is picked from the robot's Y position.
+    private boolean autoSelectSide = true;
+    private boolean aimingAtTopSide = true;
+
     private double kV = RobotConstants.Turret.KV;
 
     // Internal tracking state
@@ -148,24 +139,21 @@ public class TurretSubsystem {
     private double lastCommandedPower = 0.0;
 
     /**
-     * Initializes {@code "turretMotor"} from the FTC {@link HardwareMap}, sets
-     * {@link DcMotor.ZeroPowerBehavior#BRAKE}, resets the encoder to {@code 0}
-     * at the forward startup pose, and places the motor in
-     * {@link DcMotor.RunMode#RUN_WITHOUT_ENCODER} for software PIDF control.
-     *
-     * @param hardwareMap FTC {@link HardwareMap} from the active OpMode
+     * Initializes both continuous servos from the hardware map.
+     * The angle estimate starts at 0 here, so the turret must be pointing straight
+     * forward (home) when the OpMode is initialized.
      */
-    public TurretSubsystem(HardwareMap hardwareMap) {
-        turretMotor = hardwareMap.get(DcMotorEx.class, RobotConstants.Turret.MOTOR);
+    public TurretSubsystemTest(HardwareMap hardwareMap) {
+        leftServo = hardwareMap.get(CRServo.class, RobotConstants.Turret.SERVO_LEFT);
+        rightServo = hardwareMap.get(CRServo.class, RobotConstants.Turret.SERVO_RIGHT);
 
-        turretMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        // Both servos must push the turret the SAME way, otherwise they fight each other.
+        leftServo.setDirection(RobotConstants.Turret.SERVO_LEFT_REVERSED
+                ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+        rightServo.setDirection(RobotConstants.Turret.SERVO_RIGHT_REVERSED
+                ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
 
-        // TODO(team): verify motor direction — FORWARD should rotate turret CCW (+angle)
-        turretMotor.setDirection(DcMotorSimple.Direction.FORWARD);
-
-        turretMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        turretMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        turretMotor.setPower(0.0);
+        resetAngle();
 
         pidfController = new PIDFController(
                 RobotConstants.Turret.KP,
@@ -174,18 +162,31 @@ public class TurretSubsystem {
                 RobotConstants.Turret.KF
         );
         targetVelTimer.reset();
+        setServoPower(0.0);
+    }
+
+    /** Declares the turret's current position to be 0 rad (pointing forward). Call only when it really is. */
+    public void resetAngle() {
+        estimatedAngleRad = 0.0;
+        estimateTimer.reset();
+    }
+
+    /** Integrates the last commanded power over the elapsed time to estimate the turret angle. */
+    private void updateEstimate() {
+        double dt = Range.clip(estimateTimer.seconds(), 0.0, 0.1);
+        estimateTimer.reset();
+        estimatedAngleRad += lastCommandedPower * radPerSecAtFullPower * dt;
     }
 
     /**
-     * Updates the turret's world position, calculates the chassis-relative
-     * target angle, and commands the motor with closed-loop PIDF + velocity
-     * feedforward control.
-     *
-     * <p>Call once per loop in TeleOp or Autonomous.</p>
+     * Call once per loop. Computes the chassis-relative angle to the target from the
+     * Pedro pose and drives the servos with PIDF control.
      *
      * @param currentPose current robot {@link Pose} from Pedro Pathing
      */
     public void update(Pose currentPose) {
+        updateEstimate();
+
         if (!enabled || mode == TurretMode.DISABLED) {
             stop();
             return;
@@ -201,7 +202,9 @@ public class TurretSubsystem {
             return;
         }
 
-        // 1. Coordinate Transformation (Robot to World Frame)
+        selectTargetSide(currentPose);
+
+        // 1. Robot frame -> world frame (turret pivot position)
         double robotX = currentPose.x();
         double robotY = currentPose.y();
         double robotHeading = currentPose.heading();
@@ -212,26 +215,20 @@ public class TurretSubsystem {
         double turretWorldX = robotX + (xOffsetInches * cosH - yOffsetInches * sinH);
         double turretWorldY = robotY + (xOffsetInches * sinH + yOffsetInches * cosH);
 
-        // 2. Target Calculation (Global -> Chassis-Relative normalized to [-PI, PI])
+        // 2. Global angle to hive -> chassis-relative angle in [-PI, PI]
         double targetGlobalAngle = Math.atan2(targetYInches - turretWorldY, targetXInches - turretWorldX);
         double relativeTargetAngle = AngleUnit.normalizeRadians(targetGlobalAngle - robotHeading);
 
         driveToRelativeAngle(relativeTargetAngle);
     }
 
-    /**
-     * Runs one PIDF iteration toward a chassis-relative target angle.
-     *
-     * @param relativeTargetAngle desired turret angle relative to robot forward (radians)
-     */
     private void driveToRelativeAngle(double relativeTargetAngle) {
-        // Enforce soft rotation limits to prevent wire binding
         if (useSoftLimits) {
             relativeTargetAngle = Range.clip(relativeTargetAngle, minAngleRadians, maxAngleRadians);
         }
         relativeTargetAngleRad = relativeTargetAngle;
 
-        // Compute target angular velocity (rad/s) for kV velocity feedforward
+        // Target angular velocity (rad/s) for optional kV feedforward
         double dt = targetVelTimer.seconds();
         targetVelTimer.reset();
         double targetAngularVelocityRadSec = 0.0;
@@ -243,11 +240,11 @@ public class TurretSubsystem {
         }
         previousTargetAngleRad = relativeTargetAngleRad;
 
-        // 3. Motor PIDF Control
-        currentAngleRad = turretMotor.getCurrentPosition() / ticksPerRadian; // ticks / 167.89
+        // Current angle = dead-reckoned estimate (no encoder)
+        currentAngleRad = estimatedAngleRad;
         angleErrorRad = AngleUnit.normalizeRadians(relativeTargetAngleRad - currentAngleRad);
 
-        // Prevent shortest-path wraparound from crossing the mechanical soft limits
+        // Don't let the shortest path cross the mechanical limits (cable wrap)
         if (useSoftLimits) {
             double unwrappedTarget = currentAngleRad + angleErrorRad;
             if (unwrappedTarget > maxAngleRadians) {
@@ -260,14 +257,13 @@ public class TurretSubsystem {
         if (Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS
                 && Math.abs(targetAngularVelocityRadSec) < 0.05) {
             pidfController.reset();
-            lastCommandedPower = 0.0;
-            turretMotor.setPower(0.0);
+            setServoPower(0.0);
             return;
         }
 
         double rawPower = pidfController.calculate(angleErrorRad, targetAngularVelocityRadSec, kV);
 
-        // Hard safety cutoff if already at/beyond soft limits
+        // Hard cutoff if already at/beyond a soft limit and still pushing outward
         if (useSoftLimits) {
             if ((currentAngleRad >= maxAngleRadians && rawPower > 0.0)
                     || (currentAngleRad <= minAngleRadians && rawPower < 0.0)) {
@@ -275,42 +271,68 @@ public class TurretSubsystem {
             }
         }
 
-        lastCommandedPower = Range.clip(rawPower, -1.0, 1.0);
-        turretMotor.setPower(lastCommandedPower);
+        double maxPower = RobotConstants.Turret.MAX_POWER;
+        setServoPower(Range.clip(rawPower, -maxPower, maxPower));
+    }
+
+    /** Sends the same power to both servos. */
+    private void setServoPower(double power) {
+        lastCommandedPower = power;
+        leftServo.setPower(power);
+        rightServo.setPower(power);
     }
 
     /**
-     * Dynamically sets the field target coordinate (in Pedro Pathing inches).
-     *
-     * @param x target X coordinate in inches
-     * @param y target Y coordinate in inches
+     * Manually sets the target coordinate (Pedro inches). This turns OFF automatic hive-side
+     * selection; call {@link #setAutoSelectSide(boolean)} with true to turn it back on.
      */
     public void setTargetCoordinate(double x, double y) {
+        this.autoSelectSide = false;
         this.targetXInches = x;
         this.targetYInches = y;
     }
 
     /**
-     * @return active field target X coordinate in inches
+     * Picks the upper or lower hive side from the robot's Y position. A small hysteresis band
+     * around the midline stops the target from flipping back and forth when the robot is
+     * driving along the line.
      */
+    private void selectTargetSide(Pose pose) {
+        if (!autoSelectSide || pose == null) {
+            return;
+        }
+        double y = pose.y();
+        double mid = RobotConstants.Turret.SIDE_SWITCH_Y_INCHES;
+        double band = RobotConstants.Turret.SIDE_HYSTERESIS_INCHES;
+        if (y > mid + band) {
+            aimingAtTopSide = true;
+        } else if (y < mid - band) {
+            aimingAtTopSide = false;
+        }
+        targetXInches = aimingAtTopSide
+                ? RobotConstants.Turret.TOP_TARGET_X_INCHES : RobotConstants.Turret.BOTTOM_TARGET_X_INCHES;
+        targetYInches = aimingAtTopSide
+                ? RobotConstants.Turret.TOP_TARGET_Y_INCHES : RobotConstants.Turret.BOTTOM_TARGET_Y_INCHES;
+    }
+
+    /** Turns automatic upper/lower hive side selection on or off. */
+    public void setAutoSelectSide(boolean autoSelectSide) {
+        this.autoSelectSide = autoSelectSide;
+    }
+
+    /** @return true if the turret is currently aiming at the upper hive side */
+    public boolean isAimingAtTopSide() {
+        return aimingAtTopSide;
+    }
+
     public double getTargetX() {
         return targetXInches;
     }
 
-    /**
-     * @return active field target Y coordinate in inches
-     */
     public double getTargetY() {
         return targetYInches;
     }
 
-    /**
-     * Sets the turret operating mode. {@link TurretMode#HOME} drives the turret
-     * back to {@link RobotConstants.Turret#HOME_ANGLE_RADIANS} and holds it
-     * there; {@link TurretMode#TRACKING} resumes field-target aiming.
-     *
-     * @param mode desired operating mode
-     */
     public void setMode(TurretMode mode) {
         if (this.mode != mode) {
             pidfController.reset();
@@ -322,24 +344,18 @@ public class TurretSubsystem {
         }
     }
 
-    /**
-     * @return current operating mode
-     */
     public TurretMode getMode() {
         return mode;
     }
 
     /**
-     * Computes the Euclidean distance (in inches) from the turret's true world
-     * position to the field target for shooter flywheel velocity scaling.
-     *
-     * @param currentPose current robot {@link Pose} from Pedro Pathing
-     * @return distance from turret pivot to target in inches
+     * Distance in inches from the turret pivot to the hive.
      */
     public double getDistanceToTarget(Pose currentPose) {
         if (currentPose == null) {
             return 0.0;
         }
+        selectTargetSide(currentPose);
         double heading = currentPose.heading();
         double cosH = Math.cos(heading);
         double sinH = Math.sin(heading);
@@ -351,48 +367,29 @@ public class TurretSubsystem {
     }
 
     /**
-     * Updates the PIDF and velocity feedforward gains at runtime.
-     *
-     * @param kP proportional gain
-     * @param kI integral gain
-     * @param kD derivative gain
-     * @param kV velocity feedforward gain ({@code 0.0604} for {@code 16.564 rad/s})
-     * @param kF static friction feedforward gain
+     * Flywheel RPM recommended for the current distance to the hive, calculated by
+     * {@link ShooterRpmCalculator}. Feed this to your outtake's target RPM.
      */
+    public double getRecommendedRpm(Pose currentPose) {
+        return ShooterRpmCalculator.getRpm(getDistanceToTarget(currentPose));
+    }
+
     public void setPIDFGains(double kP, double kI, double kD, double kV, double kF) {
         this.kV = kV;
         this.pidfController.setPIDF(kP, kI, kD, kF);
     }
 
-    /**
-     * Configures soft rotation limits in degrees relative to the robot chassis.
-     *
-     * @param useSoftLimits {@code true} to enforce soft limits
-     * @param minDegrees    minimum angle in degrees (e.g., {@code -180.0})
-     * @param maxDegrees    maximum angle in degrees (e.g., {@code 180.0})
-     */
     public void setSoftLimitsDegrees(boolean useSoftLimits, double minDegrees, double maxDegrees) {
         this.useSoftLimits = useSoftLimits;
         this.minAngleRadians = Math.toRadians(minDegrees);
         this.maxAngleRadians = Math.toRadians(maxDegrees);
     }
 
-    /**
-     * Configures the mounting offset of the turret pivot from the robot odometry origin.
-     *
-     * @param xOffsetInches forward offset in inches (+X forward)
-     * @param yOffsetInches lateral offset in inches (+Y left)
-     */
     public void setMountingOffset(double xOffsetInches, double yOffsetInches) {
         this.xOffsetInches = xOffsetInches;
         this.yOffsetInches = yOffsetInches;
     }
 
-    /**
-     * Enables or disables closed-loop turret tracking.
-     *
-     * @param enabled {@code true} to actively track target, {@code false} to stop
-     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
         if (!enabled) {
@@ -400,68 +397,41 @@ public class TurretSubsystem {
         }
     }
 
-    /**
-     * Stops the turret motor and resets PIDF state.
-     */
+    /** Stops both servos and resets PIDF state. */
     public void stop() {
         pidfController.reset();
         firstTargetSample = true;
-        lastCommandedPower = 0.0;
-        turretMotor.setPower(0.0);
+        setServoPower(0.0);
     }
 
-    /**
-     * @return current turret angle in radians ({@code motor.getCurrentPosition() / 167.89})
-     */
     public double getCurrentAngleRadians() {
-        return turretMotor.getCurrentPosition() / ticksPerRadian;
+        return estimatedAngleRad;
     }
 
-    /**
-     * @return current turret angle in degrees
-     */
     public double getCurrentAngleDegrees() {
         return Math.toDegrees(getCurrentAngleRadians());
     }
 
-    /**
-     * @return target turret angle in radians
-     */
     public double getTargetAngleRadians() {
         return relativeTargetAngleRad;
     }
 
-    /**
-     * @return target turret angle in degrees
-     */
     public double getTargetAngleDegrees() {
         return Math.toDegrees(relativeTargetAngleRad);
     }
 
-    /**
-     * @return latest shortest-path angular error in radians
-     */
     public double getAngleErrorRadians() {
         return angleErrorRad;
     }
 
-    /**
-     * @return latest shortest-path angular error in degrees
-     */
     public double getAngleErrorDegrees() {
         return Math.toDegrees(angleErrorRad);
     }
 
-    /**
-     * @return latest motor power output in {@code [-1.0, 1.0]}
-     */
     public double getLastCommandedPower() {
         return lastCommandedPower;
     }
 
-    /**
-     * @return {@code true} if the turret is within tolerance of the target angle
-     */
     public boolean isOnTarget() {
         return Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS;
     }
