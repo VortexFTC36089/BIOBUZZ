@@ -111,27 +111,27 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 1;
+        public static final double INTAKE_POWER = 0.865;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -1;
+        public static final double OUTTAKE_POWER = -0.865;
 
         /**
          * Power used on the transfer motor while pulling game elements in
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 1;
+        public static final double TRANSFER_INTAKE_POWER = 0.865;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -1 ;
+        public static final double TRANSFER_REVERSE_POWER = -0.865 ;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -163,7 +163,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2400;
+        public static final double TARGET_RPM = 1860;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -178,7 +178,7 @@ public final class RobotConstants {
          * after a game piece is launched.
          */
         // TODO(team): tune velocity PIDF gains on the robot
-        public static final double KP = 80.0;
+        public static final double KP = 100.0;
         public static final double KI = 0.0;
         public static final double KD = 2.0;
         public static final double KF = 16.0;
