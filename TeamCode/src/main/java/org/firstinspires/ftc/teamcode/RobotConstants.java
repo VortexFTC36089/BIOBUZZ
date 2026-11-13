@@ -18,7 +18,8 @@ import com.pedropathing.math.Pose;
  *   <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
  *   <li>Two outtake {@link com.qualcomm.robotcore.hardware.DcMotor}s:
  *       {@code outtake_left}, {@code outtake_right}</li>
- *   <li>One turret {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code turretMotor}</li>
+ *   <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
+ *       {@code turretServoLeft}, {@code turretServoRight}</li>
  *   <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
  *   <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
@@ -159,9 +160,9 @@ public final class RobotConstants {
         public static final double TICKS_PER_REV = 28.0;
 
         /**
-         * Target flywheel RPM used while spinning up to score/eject pieces.
+         * Fixed flywheel RPM used whenever the outtake is spun up.
          */
-        // TODO(team): tune target RPM so pieces score cleanly
+        // TODO(team): tune so pieces score cleanly
         public static final double TARGET_RPM = 2400;
         /**
          * How close actual RPM must be to target to count as at speed.
@@ -169,45 +170,65 @@ public final class RobotConstants {
         public static final double RPM_TOLERANCE = 100.0;
 
         /**
-         * Velocity PIDF coefficients applied to the outtake motor in
-         * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
+         * Bang-bang flywheel control: each motor gets {@code BANG_BANG_ON_POWER}
+         * while its measured RPM is below target and {@code BANG_BANG_OFF_POWER}
+         * once it is at or above target. The motors float at zero power, so the
+         * flywheel coasts (never brakes) between pulses.
          *
-         * <p>For a flywheel, feedforward ({@code F}) does most of the work to hold
-         * steady-state RPM, and proportional ({@code P}) helps recover speed quickly
-         * after a game piece is launched.
+         * <p>Raise {@code BANG_BANG_OFF_POWER} slightly (e.g. 0.3 to 0.5) if the
+         * RPM ripple around the target is too large; it must stay low enough
+         * that the wheel still slows down at that power.
          */
-        // TODO(team): tune velocity PIDF gains on the robot
-        public static final double KP = 80.0;
-        public static final double KI = 0.0;
-        public static final double KD = 2.0;
-        public static final double KF = 16.0;
+        // TODO(team): tune bang-bang powers on the robot
+        public static final double BANG_BANG_ON_POWER = 1.0;
+        public static final double BANG_BANG_OFF_POWER = 0.0;
     }
 
     /**
-     * Hardware map name, geometry offsets, encoder resolution, rotation limits,
-     * and software PIDF / velocity feedforward gains for the goBILDA Gear-Driven
-     * Turret (SKU 3208-0004-0001) driven by a 435 RPM 5203 Series Yellow Jacket Motor.
+     * goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by TWO continuous-rotation
+     * servos with NO encoder. Both servos sit on the same side of the turret and their
+     * pinions mesh with the same turret gear. The turret angle is estimated from commanded
+     * power and time, so it can drift.
      */
     public static final class Turret {
-        public static final String MOTOR = "turretMotor";
+        // Hardware map names (must match the Robot Controller config exactly).
+        public static final String SERVO_LEFT = "turretServoLeft";
+        public static final String SERVO_RIGHT = "turretServoRight";
 
         /**
-         * goBILDA Gear-Driven Turret (SKU 3208-0004-0001) + 5203 Series 435 RPM Motor:
-         * <ul>
-         *   <li>Motor Encoder Resolution: {@code 383.6} ticks/rev at motor output shaft</li>
-         *   <li>External Gear Reduction: {@code 2.75:1} (64T Hub-Mount Gear)</li>
-         *   <li>Total Turret Resolution: {@code 383.6 * 2.75 = 1054.9} ticks/rev</li>
-         *   <li>Ticks per Radian: {@code 1054.9 / (2 * PI) ≈ 167.89} ticks/rad</li>
-         *   <li>Ticks per Degree: {@code 1054.9 / 360.0 ≈ 2.93} ticks/deg</li>
-         *   <li>Max Turret Speed: {@code 435 / 2.75 = 158.18 RPM} ({@code 16.564 rad/s})</li>
-         * </ul>
+         * Flip so BOTH servos push the turret the same direction, and so positive power
+         * turns the turret counterclockwise (+angle). Test each servo alone at low power
+         * first; if they fight each other they can burn out.
+         *
+         * <p>Both servos are mounted facing the same way on the same side of the turret,
+         * and both pinions mesh with the same turret gear, so they must spin the same
+         * way to move it. The two flags must therefore always MATCH (both false or both
+         * true). If the turret turns away from the target instead of toward it, flip
+         * BOTH flags together, never just one.
          */
-        public static final double MOTOR_TICKS_PER_REV = 383.6;
+        // TODO(team): confirm the turret turns toward the target on the robot
+        public static final boolean SERVO_LEFT_REVERSED = false;
+        public static final boolean SERVO_RIGHT_REVERSED = false;
+
+        /** Servo turns per one turret turn, fixed by the 2.75:1 gear-driven turret. */
         public static final double GEAR_RATIO = 2.75;
-        public static final double TICKS_PER_TURRET_REV = 1054.9;
-        public static final double TICKS_PER_RADIAN = 167.89;
-        public static final double TICKS_PER_DEGREE = 2.93;
-        public static final double MAX_ANGULAR_VELOCITY_RAD_PER_SEC = 16.564;
+
+        /**
+         * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
+         * Spec sheets usually give seconds per 60 degrees: RPM = 10 / (seconds per 60 degrees).
+         * Use the figure for the voltage the servos actually run at.
+         */
+        // TODO(team): set from the servo spec sheet (105 is only a placeholder)
+        public static final double SERVO_FREE_SPEED_RPM = 105.0;
+
+        /**
+         * Turret speed (radians/second) at power 1.0, assuming speed is proportional to power.
+         * Calculated from the servo speed and the gear ratio. The whole aiming accuracy
+         * depends on this number. A loaded turret turns slower than the no-load spec, so
+         * if the turret consistently stops short of the target, lower SERVO_FREE_SPEED_RPM.
+         */
+        public static final double RAD_PER_SEC_AT_FULL_POWER =
+                SERVO_FREE_SPEED_RPM * 2.0 * Math.PI / 60.0 / GEAR_RATIO;
 
         /**
          * Turret pivot offset from the robot's localization center in inches
@@ -218,34 +239,43 @@ public final class RobotConstants {
         public static final double OFFSET_Y_INCHES = 0.0;
 
         /**
-         * Default (High Goal) field target coordinates in Pedro Pathing inches.
+         * The two hive sides in Pedro Pathing inches. The turret aims at the TOP side when the
+         * robot is above SIDE_SWITCH_Y_INCHES and at the BOTTOM side when it is below.
          */
-        // TODO(team): set default goal/target X and Y coordinates in inches
-        public static final double DEFAULT_TARGET_X_INCHES = 57.0;
-        public static final double DEFAULT_TARGET_Y_INCHES = 72.0;
+        // TODO(team): replace these placeholders with the real hive coordinates (read them in the Pedro visualizer)
+        public static final double TOP_TARGET_X_INCHES = 57.0;
+        public static final double TOP_TARGET_Y_INCHES = 84.0;
+        public static final double BOTTOM_TARGET_X_INCHES = 57.0;
+        public static final double BOTTOM_TARGET_Y_INCHES = 60.0;
 
-        /**
-         * Secondary (center / submersible) field target coordinates in Pedro
-         * Pathing inches, selected with Gamepad 2 B in TeleOp.
-         */
+        /** Y position (inches) where the aimed side switches; 72 is the middle of a 144-inch field. */
+        public static final double SIDE_SWITCH_Y_INCHES = 72.0;
+
+        /** Dead band (inches) around the switch line so the target does not flicker. */
+        public static final double SIDE_HYSTERESIS_INCHES = 3.0;
+
+        /** Target used before the first pose arrives (the top side). */
+        public static final double DEFAULT_TARGET_X_INCHES = TOP_TARGET_X_INCHES;
+        public static final double DEFAULT_TARGET_Y_INCHES = TOP_TARGET_Y_INCHES;
+
+        /** Secondary target coordinates, selected with Gamepad 2 Dpad Down in TeleOp. */
         // TODO(team): set secondary target X and Y coordinates in inches
         public static final double CENTER_TARGET_X_INCHES = 72.0;
         public static final double CENTER_TARGET_Y_INCHES = 72.0;
 
-        /**
-         * Chassis-relative angle (radians) the turret returns to when the
-         * driver requests the home / starting position.
-         */
+        /** Chassis-relative angle (radians) the turret returns to in HOME mode. */
         public static final double HOME_ANGLE_RADIANS = 0.0;
 
         /**
-         * Whether soft rotation limits are enforced to prevent wire binding.
+         * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
+         * means the turret spins without limit and always takes the shortest path to the
+         * target. Set back to {@code true} if any cable can wrap around the turret.
          */
-        public static final boolean USE_SOFT_LIMITS = true;
+        public static final boolean USE_SOFT_LIMITS = false;
 
         /**
-         * Minimum and maximum allowed turret angles relative to the robot
-         * chassis (0° = straight forward, positive = counterclockwise).
+         * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
+         * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
          */
         // TODO(team): measure safe mechanical rotation limits in degrees
         public static final double MIN_ANGLE_DEGREES = -180.0;
@@ -253,31 +283,26 @@ public final class RobotConstants {
         public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
         public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
 
+        /** Servo power cap in [0, 1]. Start low (0.5) for first tests, raise after tuning. */
+        // TODO(team): raise once the turret behaves
+        public static final double MAX_POWER = 0.5;
+
         /**
-         * Software positional PIDF + Velocity Feedforward (kV) gains:
-         * <ul>
-         *   <li>{@code KP = 1.2}</li>
-         *   <li>{@code KI = 0.0}</li>
-         *   <li>{@code KD = 0.05}</li>
-         *   <li>{@code KV = 0.0604} ({@code 1.0 / 16.564 rad/s})</li>
-         *   <li>{@code KF = 0.0}</li>
-         * </ul>
+         * Controller gains. Output is servo power per radian of error. There is no real
+         * feedback, so keep it simple: mostly KP. KD, KV and KF are 0 because the angle is
+         * only an estimate and extra terms just add noise.
          */
-        // TODO(team): tune turret software PIDF/kV gains on the robot
-        public static final double KP = 1.2;
+        // TODO(team): tune on the robot
+        public static final double KP = 1.0;
         public static final double KI = 0.0;
-        public static final double KD = 0.05;
-        public static final double KV = 0.0604;
+        public static final double KD = 0.0;
+        public static final double KV = 0.0;
         public static final double KF = 0.0;
 
-        /**
-         * Maximum integral accumulation (radians * seconds) to prevent integral windup.
-         */
+        /** Maximum integral accumulation (radians * seconds). */
         public static final double MAX_INTEGRAL = 0.5;
 
-        /**
-         * Angle error deadband (radians) within which the turret is considered aimed.
-         */
+        /** Angle error deadband (radians) within which the turret counts as aimed. */
         public static final double ANGLE_TOLERANCE_RADIANS = Math.toRadians(1.0);
     }
 

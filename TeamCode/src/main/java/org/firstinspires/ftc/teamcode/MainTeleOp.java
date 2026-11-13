@@ -20,7 +20,8 @@ import static com.pedropathing.api.Paths.line;
  * robot. Bindings are listed in {@link #init()} telemetry.
  *
  * <p>Hardware: four mecanum motors and Pinpoint from {@link Constants}, plus
- * the intake motor and two-position servo from {@link RobotConstants}.
+ * the intake, outtake, two-position servo, and two turret servos from
+ * {@link RobotConstants}.
  *
  * <p>Do not run path-following (home pose) until Pinpoint and Foresight are
  * tuned. Manual drive still works before that if motor directions are right.
@@ -29,11 +30,11 @@ import static com.pedropathing.api.Paths.line;
 public class MainTeleOp extends OpMode {
 
     /**
-     * Set to {@code true} to build and run the turret in TeleOp. While
-     * {@code false} the turret motor is never touched (no hardware lookup,
-     * no power), so TeleOp runs fine without {@code turretMotor} configured.
+     * Set to {@code false} to run TeleOp without the turret. While
+     * {@code false} the two turret servos are never touched (no hardware
+     * lookup, no power), so TeleOp runs fine without them configured.
      */
-    private static final boolean TURRET_ENABLED = false;
+    private static final boolean TURRET_ENABLED = true;
 
     private Follower follower;
     private TurretSubsystem turret;
@@ -47,7 +48,7 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
     private final ToggleButton servoToggle = new ToggleButton();
-    private final ToggleButton turretHighGoalToggle = new ToggleButton();
+    private final ToggleButton turretHiveToggle = new ToggleButton();
     private final ToggleButton turretCenterToggle = new ToggleButton();
     private final ToggleButton turretHomeToggle = new ToggleButton();
 
@@ -81,15 +82,13 @@ public class MainTeleOp extends OpMode {
         servoAtPositionB = false;
         servo.setPosition(RobotConstants.Servo.POSITION_A);
 
-        // Turret aims continuously using the follower's pose. Start on the
-        // default (High Goal) target in TRACKING mode. Skipped entirely while
+        // Turret aims continuously at the hive using the follower's pose, and
+        // picks the top or bottom hive side from the robot's Y position. Its
+        // angle is only an estimate (no encoder), so the turret must be
+        // pointing straight forward right now. Skipped entirely while
         // TURRET_ENABLED is false.
         if (TURRET_ENABLED) {
             turret = new TurretSubsystem(hardwareMap);
-            turret.setTargetCoordinate(
-                    RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
-                    RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
-            );
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         } else {
             turret = null;
@@ -106,7 +105,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake");
         if (TURRET_ENABLED) {
-            telemetry.addLine("G2: Dpad Up = turret HIGH GOAL  |  Dpad Down = turret CENTER  |  LB = turret HOME");
+            telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret HOME");
+            telemetry.addLine("Turret must be pointing straight forward now (no encoder)");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
         }
@@ -313,7 +313,8 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Holding the right trigger spins the outtake up to target RPM.
+     * Holding the right trigger spins the outtake up to the fixed
+     * {@link RobotConstants.Outtake#TARGET_RPM}.
      */
     private void updateOuttakeFromGamepad() {
         if (gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
@@ -324,17 +325,16 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Gamepad 2 turret controls. Dpad Up / Down pick the field target the turret
-     * continuously aims at; LB toggles a manual HOME override that parks the
-     * turret at its starting angle regardless of robot pose. Selecting a
-     * target while HOME is active also returns the turret to TRACKING.
+     * Gamepad 2 turret controls. Dpad Up aims at the hive, with the top or
+     * bottom side picked automatically from the robot's Y position. Dpad Down
+     * aims at the fixed CENTER target instead. LB toggles a manual HOME
+     * override that parks the turret at its starting angle regardless of robot
+     * pose. Selecting a target while HOME is active also returns the turret to
+     * TRACKING.
      */
     private void updateTurretFromGamepad() {
-        if (turretHighGoalToggle.update(gamepad2.dpad_up)) {
-            turret.setTargetCoordinate(
-                    RobotConstants.Turret.DEFAULT_TARGET_X_INCHES,
-                    RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES
-            );
+        if (turretHiveToggle.update(gamepad2.dpad_up)) {
+            turret.setAutoSelectSide(true);
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
         if (turretCenterToggle.update(gamepad2.dpad_down)) {
@@ -378,6 +378,7 @@ public class MainTeleOp extends OpMode {
         if (turret != null) {
             telemetry.addData("Turret mode", turret.getMode());
             telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
+            telemetry.addData("Target distance (in)", "%.1f", turret.getDistanceToTarget(pose));
             telemetry.addData("Turret angle (deg)", "%.1f -> %.1f",
                     turret.getCurrentAngleDegrees(), turret.getTargetAngleDegrees());
             telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",

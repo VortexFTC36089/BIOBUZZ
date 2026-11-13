@@ -26,7 +26,8 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Transfer | Motor | `transfer` |
 | Left outtake | Motor | `outtake_left` |
 | Right outtake | Motor | `outtake_right` |
-| Turret | Motor | `turretMotor` |
+| Turret left | CR Servo | `turretServoLeft` |
+| Turret right | CR Servo | `turretServoRight` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
 Pinpoint wiring (from Pedro docs):
@@ -68,6 +69,7 @@ TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
 ├── IntakeTest.java              Intake-only test
 ├── OuttakeTest.java             Outtake motor + servo gate test
 ├── DrivetrainDirectionTest.java Spin one wheel at a time
+├── TurretSubsystem.java         Two-servo turret aimed from the Pedro pose
 ├── ToggleButton.java            Press-once helper
 └── pedroPathing/                Constants, Tuning, AutoTune procedures
 ```
@@ -115,12 +117,12 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Y (hold) | Reverse intake |
 | X (hold) | Run transfer motor |
 | B (hold) | Reverse transfer motor |
-| Right trigger (hold) | Run outtake motors to target RPM |
-| Dpad Up | Turret: aim at High Goal (`Turret.DEFAULT_TARGET_*`) |
-| Dpad Down | Turret: aim at Center / Submersible (`Turret.CENTER_TARGET_*`) |
+| Right trigger (hold) | Run outtake motors at `Outtake.TARGET_RPM` |
+| Dpad Up | Turret: aim at the hive, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
+| Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: toggle HOME override (return to starting angle) |
 
-The turret aims continuously from `follower.pose()` every loop in both TeleOp and Auto, so it tracks while the chassis moves.
+The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos with no encoder. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves. Its angle is estimated from commanded power and time, so it must point straight forward when the OpMode is initialized. The speed used for that estimate comes from `Turret.SERVO_FREE_SPEED_RPM` (from the servo spec sheet) divided by `Turret.GEAR_RATIO`.
 
 Stick signs follow Pedro’s TeleOp guide: `-left_y`, `+left_x`, `+right_x`.
 
