@@ -170,18 +170,18 @@ public final class RobotConstants {
         public static final double RPM_TOLERANCE = 100.0;
 
         /**
-         * Bang-bang flywheel control: each motor gets {@code BANG_BANG_ON_POWER}
-         * while its measured RPM is below target and {@code BANG_BANG_OFF_POWER}
-         * once it is at or above target. The motors float at zero power, so the
-         * flywheel coasts (never brakes) between pulses.
+         * Velocity PIDF coefficients applied to the outtake motors in
+         * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
          *
-         * <p>Raise {@code BANG_BANG_OFF_POWER} slightly (e.g. 0.3 to 0.5) if the
-         * RPM ripple around the target is too large; it must stay low enough
-         * that the wheel still slows down at that power.
+         * <p>For a flywheel, feedforward ({@code F}) does most of the work to hold
+         * steady-state RPM, and proportional ({@code P}) helps recover speed quickly
+         * after a game piece is launched.
          */
-        // TODO(team): tune bang-bang powers on the robot
-        public static final double BANG_BANG_ON_POWER = 1.0;
-        public static final double BANG_BANG_OFF_POWER = 0.0;
+        // TODO(team): tune velocity PIDF gains on the robot
+        public static final double KP = 80.0;
+        public static final double KI = 0.0;
+        public static final double KD = 2.0;
+        public static final double KF = 16.0;
     }
 
     /**

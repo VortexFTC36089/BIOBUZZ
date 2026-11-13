@@ -4,9 +4,8 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
- * Dual-motor outtake subsystem using bang-bang RPM control: each motor runs
- * at full power while its encoder RPM is below target and coasts once it is
- * at or above target.
+ * Dual-motor outtake subsystem using encoder velocity control (RPM) with the
+ * hub's velocity PIDF.
  *
  * <p>OpModes should call {@link #outtake()} (or {@link #setTargetRpm(double)})
  * or {@link #stopMotor()} / {@link #stop()}, then call {@link #update()} once
@@ -45,7 +44,7 @@ public class OuttakeSubsystem {
 
     /**
      * Finds both outtake motors and puts them in a known-safe initial state
-     * (stopped, raw power mode, encoders reset).
+     * (stopped in velocity mode with PIDF gains applied).
      *
      * @param hardwareMap FTC hardware map from the running OpMode
      */
@@ -63,10 +62,9 @@ public class OuttakeSubsystem {
         leftMotor.setDirection(DcMotorEx.Direction.FORWARD);
         rightMotor.setDirection(DcMotorEx.Direction.REVERSE);
 
-        // RUN_WITHOUT_ENCODER gives raw power control (no hub PIDF) while the
-        // encoder still reports velocity for the bang-bang comparison.
-        configureBangBangControl(leftMotor);
-        configureBangBangControl(rightMotor);
+        // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
+        configureVelocityControl(leftMotor);
+        configureVelocityControl(rightMotor);
 
         motorState = MotorState.OFF;
         targetRpm = 0.0;
@@ -77,22 +75,15 @@ public class OuttakeSubsystem {
         rightMotor.setPower(0.0);
     }
 
-    private void configureBangBangControl(DcMotorEx motor) {
+    private void configureVelocityControl(DcMotorEx motor) {
         motor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
-        motor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-    }
-
-    /**
-     * Bang-bang law for one flywheel motor: full "on" power below target RPM,
-     * "off" power at or above it.
-     *
-     * @param measuredRpm RPM read from this motor's encoder this loop
-     * @return motor power to command
-     */
-    private double bangBangPower(double measuredRpm) {
-        return measuredRpm < targetRpm
-                ? RobotConstants.Outtake.BANG_BANG_ON_POWER
-                : RobotConstants.Outtake.BANG_BANG_OFF_POWER;
+        motor.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        motor.setVelocityPIDFCoefficients(
+                RobotConstants.Outtake.KP,
+                RobotConstants.Outtake.KI,
+                RobotConstants.Outtake.KD,
+                RobotConstants.Outtake.KF
+        );
     }
 
     /**
@@ -144,7 +135,7 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Reads both encoders, applies bang-bang power to each motor, and
+     * Reads both encoders, re-commands the target velocity (ticks/sec), and
      * refreshes {@link #getMotorState()} from the measured RPM.
      *
      * <p>Call once per OpMode loop.</p>
@@ -154,7 +145,7 @@ public class OuttakeSubsystem {
         measuredLeftRpm = ticksPerSecToRpm(leftMotor.getVelocity());
         measuredRightRpm = ticksPerSecToRpm(rightMotor.getVelocity());
 
-        // 2. Command: bang-bang each motor against its own measured RPM, or coast.
+        // 2. Command: hold target RPM via the hub's velocity PIDF, or coast.
         if (targetRpm <= 0.0) {
             leftMotor.setPower(0.0);
             rightMotor.setPower(0.0);
@@ -162,13 +153,18 @@ public class OuttakeSubsystem {
             return;
         }
 
-        leftMotor.setPower(bangBangPower(measuredLeftRpm));
-        rightMotor.setPower(bangBangPower(measuredRightRpm));
+        double ticksPerSec = rpmToTicksPerSec(targetRpm);
+        leftMotor.setVelocity(ticksPerSec);
+        rightMotor.setVelocity(ticksPerSec);
 
         // 3. Check: both motors must be inside tolerance to count as at speed.
         boolean leftOk = Math.abs(measuredLeftRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         boolean rightOk = Math.abs(measuredRightRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         motorState = (leftOk && rightOk) ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
+    }
+
+    private static double rpmToTicksPerSec(double rpm) {
+        return rpm * RobotConstants.Outtake.TICKS_PER_REV / 60.0;
     }
 
     private static double ticksPerSecToRpm(double ticksPerSec) {
