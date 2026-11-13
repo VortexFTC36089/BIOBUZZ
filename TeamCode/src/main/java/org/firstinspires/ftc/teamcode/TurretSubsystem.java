@@ -366,14 +366,6 @@ public class TurretSubsystem {
         return Math.hypot(targetXInches - turretWorldX, targetYInches - turretWorldY);
     }
 
-    /**
-     * Flywheel RPM recommended for the current distance to the hive, calculated by
-     * {@link ShooterRpmCalculator}. Feed this to your outtake's target RPM.
-     */
-    public double getRecommendedRpm(Pose currentPose) {
-        return ShooterRpmCalculator.getRpm(getDistanceToTarget(currentPose));
-    }
-
     public void setPIDFGains(double kP, double kI, double kD, double kV, double kF) {
         this.kV = kV;
         this.pidfController.setPIDF(kP, kI, kD, kF);

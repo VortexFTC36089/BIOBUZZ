@@ -160,35 +160,14 @@ public final class RobotConstants {
         public static final double TICKS_PER_REV = 28.0;
 
         /**
-         * Flywheel RPM that scores from the start pose. This is the ONE test shot
-         * {@link ShooterRpmCalculator} is calibrated against: it scales this RPM
-         * to every other distance. Also used as the fixed RPM by test OpModes.
+         * Fixed flywheel RPM used whenever the outtake is spun up.
          */
-        // TODO(team): tune so pieces score cleanly from the start pose
+        // TODO(team): tune so pieces score cleanly
         public static final double TARGET_RPM = 2400;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
         public static final double RPM_TOLERANCE = 100.0;
-
-        /**
-         * Shot geometry used by {@link ShooterRpmCalculator} to turn the Pedro
-         * distance into a flywheel RPM. The launch angle is measured up from
-         * horizontal; both heights are measured up from the floor.
-         */
-        // TODO(team): read the launch angle and exit height off the CAD (these are placeholders)
-        public static final double LAUNCH_ANGLE_DEGREES = 45.0;
-        public static final double LAUNCH_HEIGHT_INCHES = 12.0;
-        // TODO(team): set to the height of the hive opening from the game manual (placeholder)
-        public static final double GOAL_HEIGHT_INCHES = 36.0;
-
-        /**
-         * Limits on the calculated RPM, so a bad pose or a spot the shooter
-         * cannot reach from never commands a silly speed.
-         */
-        // TODO(team): set from what the flywheel can actually hold
-        public static final double MIN_RPM = 1000.0;
-        public static final double MAX_RPM = 5000.0;
 
         /**
          * Bang-bang flywheel control: each motor gets {@code BANG_BANG_ON_POWER}

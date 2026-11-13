@@ -32,8 +32,7 @@ public class MainTeleOp extends OpMode {
     /**
      * Set to {@code false} to run TeleOp without the turret. While
      * {@code false} the two turret servos are never touched (no hardware
-     * lookup, no power), so TeleOp runs fine without them configured, and the
-     * outtake uses the fixed {@link RobotConstants.Outtake#TARGET_RPM}.
+     * lookup, no power), so TeleOp runs fine without them configured.
      */
     private static final boolean TURRET_ENABLED = true;
 
@@ -314,27 +313,15 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Holding the right trigger spins the outtake up. The target RPM is
-     * recalculated every loop from the Pedro pose, so it follows the robot's
-     * distance to the target as it drives.
+     * Holding the right trigger spins the outtake up to the fixed
+     * {@link RobotConstants.Outtake#TARGET_RPM}.
      */
     private void updateOuttakeFromGamepad() {
         if (gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
-            outtake.setTargetRpm(recommendedOuttakeRpm());
+            outtake.outtake();
         } else {
             outtake.stopMotor();
         }
-    }
-
-    /**
-     * @return flywheel RPM for the current distance from the turret to its
-     *         target, calculated by {@link ShooterRpmCalculator}; the fixed
-     *         {@link RobotConstants.Outtake#TARGET_RPM} while the turret is disabled
-     */
-    private double recommendedOuttakeRpm() {
-        return turret != null
-                ? turret.getRecommendedRpm(follower.pose())
-                : RobotConstants.Outtake.TARGET_RPM;
     }
 
     /**
@@ -391,8 +378,7 @@ public class MainTeleOp extends OpMode {
         if (turret != null) {
             telemetry.addData("Turret mode", turret.getMode());
             telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
-            telemetry.addData("Target distance (in)", "%.1f (rpm=%.0f)",
-                    turret.getDistanceToTarget(pose), turret.getRecommendedRpm(pose));
+            telemetry.addData("Target distance (in)", "%.1f", turret.getDistanceToTarget(pose));
             telemetry.addData("Turret angle (deg)", "%.1f -> %.1f",
                     turret.getCurrentAngleDegrees(), turret.getTargetAngleDegrees());
             telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",
