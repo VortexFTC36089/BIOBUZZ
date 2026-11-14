@@ -104,7 +104,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  X = field-centric  |  LB hold = slow");
         telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home  |  A = servo A/B");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
-        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake");
+        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake  |  LT hold = open gate");
         if (TURRET_ENABLED) {
             telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret HOME");
             telemetry.addLine("Turret must be pointing straight forward now (no encoder)");
@@ -325,7 +325,8 @@ public class MainTeleOp extends OpMode {
 
     /**
      * Holding the right trigger spins the outtake up to the fixed
-     * {@link RobotConstants.Outtake#TARGET_RPM}.
+     * {@link RobotConstants.Outtake#TARGET_RPM}. Holding the left trigger
+     * opens the outtake gate; releasing it closes the gate.
      */
     private void updateOuttakeFromGamepad() {
         if (gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
@@ -333,6 +334,8 @@ public class MainTeleOp extends OpMode {
         } else {
             outtake.stopMotor();
         }
+
+        outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
     }
 
     /**
@@ -385,6 +388,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Outtake Motor", outtake.getMotorState());
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
+        telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
         telemetry.addData("Servo", servoAtPositionB ? "POSITION_B" : "POSITION_A");
         if (turret != null) {
             telemetry.addData("Turret mode", turret.getMode());

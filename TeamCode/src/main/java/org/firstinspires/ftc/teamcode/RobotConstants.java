@@ -111,27 +111,27 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.865;
+        public static final double INTAKE_POWER = 0.85;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -0.865;
+        public static final double OUTTAKE_POWER = -0.85;
 
         /**
          * Power used on the transfer motor while pulling game elements in
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 0.865;
+        public static final double TRANSFER_INTAKE_POWER = 0.85;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -0.865 ;
+        public static final double TRANSFER_REVERSE_POWER = -0.85 ;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -163,7 +163,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 1860;
+        public static final double TARGET_RPM = 1870;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -182,13 +182,23 @@ public final class RobotConstants {
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
         public static final double LEFT_KP = 100.0;
         public static final double LEFT_KI = 0.0;
-        public static final double LEFT_KD = 2.0;
-        public static final double LEFT_KF = 16.0;
+        public static final double LEFT_KD = 1.0;
+        public static final double LEFT_KF = 10.0;
 
         public static final double RIGHT_KP = 100.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 2.0;
-        public static final double RIGHT_KF = 16.0;
+        public static final double RIGHT_KF = 10.0;
+
+        /**
+         * Gate servo that holds game pieces back from the flywheels. It is
+         * opened manually (Gamepad 2 left trigger in TeleOp) and is closed
+         * otherwise.
+         */
+        public static final String GATE_SERVO = "outtake_gate";
+        // TODO(team): set both gate positions on the robot (0.0 to 1.0)
+        public static final double GATE_CLOSED_POSITION = 0;
+        public static final double GATE_OPEN_POSITION = .3;
     }
 
     /**
@@ -369,7 +379,7 @@ public final class RobotConstants {
          * First pose. Used at init so the mechanism starts in a known place.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_A = 0.1;
+        public static final double POSITION_A = 0.5;
 
         /**
          * Second pose.

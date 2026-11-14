@@ -88,31 +88,31 @@ public final class Constants {
      * makes autonomous worse, not better. Run Foresight AutoTune and paste
      * the generated block over this config.
      **/
-     public static ForesightConfig foresightConfig = new ForesightConfig(
-     c -> {
-     Controller primaryTranslationalForward = Controller.proportional(0.23993147840580614);
-     Controller secondaryTranslationalForward = Controller.proportional(0.08864827018376768);
-     Controller primaryTranslationalLateral = Controller.proportional(0.36594270255173106);
-     Controller secondaryTranslationalLateral = Controller.proportional(0.13520605042376532);
+    public static ForesightConfig foresightConfig = new ForesightConfig(
+            c -> {
+                Controller primaryTranslationalForward = Controller.proportional(0.31947847279123487);
+                Controller secondaryTranslationalForward = Controller.proportional(0.11803875907434708);
+                Controller primaryTranslationalLateral = Controller.proportional(0.3847987901170078);
+                Controller secondaryTranslationalLateral = Controller.proportional(0.14217287093519593);
 
-     c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
-     c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
+                c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
+                c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
 
-     c.coast.set(Controller.proportionalFeedforward(0.01230098404188305));
-     c.brake.set(Controller.proportionalFeedforward(0.010455836435600592));
+                c.coast.set(Controller.proportionalFeedforward(0.013639059646833965));
+                c.brake.set(Controller.proportionalFeedforward(0.01159320069980887));
 
-     c.headingFeedback.set(Controller.proportional(3.847342812396396));
-     c.headingBrakeCoefficients.set(Vector2D.cartesian(0.04743537455963628, 0.0026814449356831116));
+                c.headingFeedback.set(Controller.proportional(3.730101582067613));
+                c.headingBrakeCoefficients.set(Vector2D.cartesian(0.04894892489595109, 0.0027870785862719066));
 
-     c.linearBrakeCoefficients.set(Matrix.diag(0.10043099388574359, 0.07395841362774781));
-     c.quadraticBrakeCoefficients.set(Matrix.diag(0.001000570904333852, 0.0012135911138595392));
+                c.linearBrakeCoefficients.set(Matrix.diag(0.06519159470768404, 0.07263570836396714));
+                c.quadraticBrakeCoefficients.set(Matrix.diag(0.0019698379151782863, 0.0012798257883759566));
 
-     c.maxAchievableForwardVelocity.set(71.55020073986739);
-     c.maxAchievableStrafeVelocity.set(59.70076842045518);
-     c.naturalForwardDeceleration.set(29.331443316820213);
-     c.naturalStrafeDeceleration.set(59.842846594727625);
-     }
-     );
+                c.maxAchievableForwardVelocity.set(76.32474899487377);
+                c.maxAchievableStrafeVelocity.set(60.411890873151094);
+                c.naturalForwardDeceleration.set(36.51264404148637);
+                c.naturalStrafeDeceleration.set(64.61405850864067);
+            }
+    );
 
     /**
      * Builds a follower for this robot using the configs above.

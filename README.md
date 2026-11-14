@@ -26,6 +26,7 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Transfer | Motor | `transfer` |
 | Left outtake | Motor | `outtake_left` |
 | Right outtake | Motor | `outtake_right` |
+| Outtake gate | Servo | `outtake_gate` |
 | Turret left | CR Servo | `turretServoLeft` |
 | Turret right | CR Servo | `turretServoRight` |
 | Flower servo | Servo | `flower` |
@@ -128,6 +129,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | X (hold) | Run transfer motor |
 | B (hold) | Reverse transfer motor |
 | Right trigger (hold) | Run outtake motors at `Outtake.TARGET_RPM` |
+| Left trigger (hold) | Open outtake gate (closes on release) |
 | Dpad Up | Turret: aim at the hive, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
 | Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: toggle HOME override (return to starting angle) |

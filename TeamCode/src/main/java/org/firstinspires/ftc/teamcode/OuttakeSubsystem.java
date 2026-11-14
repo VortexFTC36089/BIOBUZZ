@@ -1,11 +1,17 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.Servo;
 
 /**
  * Dual-motor outtake subsystem using encoder velocity control (RPM) with the
- * hub's velocity PIDF.
+ * hub's velocity PIDF, plus a manually controlled gate servo that holds game
+ * pieces back from the flywheels.
+ *
+ * <p>The gate is driven only by {@link #setGateOpen(boolean)}; it does not
+ * check flywheel speed. {@link #stop()} closes it.
  *
  * <p>OpModes should call {@link #outtake()} (or {@link #setTargetRpm(double)})
  * or {@link #stopMotor()} / {@link #stop()}, then call {@link #update()} once
@@ -14,7 +20,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * <p>Hardware: two {@link DcMotorEx} motors with encoders named
  * {@link RobotConstants.Outtake#LEFT_MOTOR} and
- * {@link RobotConstants.Outtake#RIGHT_MOTOR}.
+ * {@link RobotConstants.Outtake#RIGHT_MOTOR}, and one positional servo named
+ * {@link RobotConstants.Outtake#GATE_SERVO}.
  */
 public class OuttakeSubsystem {
 
@@ -33,7 +40,10 @@ public class OuttakeSubsystem {
 
     private final DcMotorEx leftMotor;
     private final DcMotorEx rightMotor;
+    private final Servo gateServo;
 
+    private boolean gateOpen;
+    private boolean gateRequestedOpen;
     private MotorState motorState;
     private double targetRpm;
 
@@ -59,8 +69,8 @@ public class OuttakeSubsystem {
         // Dual opposing wheels typically spin opposite motor directions so both
         // push the game piece forward.
         // TODO(team): verify directions — positive RPM on both should score/eject
-        leftMotor.setDirection(DcMotorEx.Direction.FORWARD);
-        rightMotor.setDirection(DcMotorEx.Direction.REVERSE);
+        leftMotor.setDirection(DcMotorEx.Direction.REVERSE);
+        rightMotor.setDirection(DcMotorEx.Direction.FORWARD);
 
         // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
         // Each motor gets its own gains.
@@ -82,6 +92,35 @@ public class OuttakeSubsystem {
 
         leftMotor.setPower(0.0);
         rightMotor.setPower(0.0);
+
+        // Start with the gate closed so nothing reaches the flywheels early.
+        gateServo = hardwareMap.get(Servo.class, RobotConstants.Outtake.GATE_SERVO);
+        gateOpen = false;
+        gateRequestedOpen = false;
+        gateServo.setPosition(RobotConstants.Outtake.GATE_CLOSED_POSITION);
+    }
+
+    /**
+     * Requests the gate open ({@code true}) or closed ({@code false}). The gate
+     * is fully manual: it does not wait for the flywheels to be at speed.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     *
+     * @param open {@code true} to open the gate, {@code false} to close it
+     */
+    public void setGateOpen(boolean open) {
+        gateRequestedOpen = open;
+    }
+
+    /** Moves the gate servo only when the requested state actually changes. */
+    private void applyGate() {
+        if (gateRequestedOpen == gateOpen) {
+            return;
+        }
+        gateOpen = gateRequestedOpen;
+        gateServo.setPosition(gateOpen
+                ? RobotConstants.Outtake.GATE_OPEN_POSITION
+                : RobotConstants.Outtake.GATE_CLOSED_POSITION);
     }
 
     private void configureVelocityControl(DcMotorEx motor, double kP, double kI, double kD, double kF) {
@@ -130,12 +169,14 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Stops both outtake motors. Always safe to call from OpMode {@code stop()}.
+     * Stops both outtake motors and closes the gate. Always safe to call from
+     * OpMode {@code stop()}.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
     public void stop() {
         stopMotor();
+        setGateOpen(false);
     }
 
     /**
@@ -145,6 +186,9 @@ public class OuttakeSubsystem {
      * <p>Call once per OpMode loop.</p>
      */
     public void update() {
+        // 0. Gate: follow the manual request, independent of flywheel state.
+        applyGate();
+
         // 1. Measure: sample both encoders once per loop.
         measuredLeftRpm = ticksPerSecToRpm(leftMotor.getVelocity());
         measuredRightRpm = ticksPerSecToRpm(rightMotor.getVelocity());
@@ -165,6 +209,13 @@ public class OuttakeSubsystem {
         boolean leftOk = Math.abs(measuredLeftRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         boolean rightOk = Math.abs(measuredRightRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         motorState = (leftOk && rightOk) ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
+    }
+
+    /**
+     * @return {@code true} if the gate servo is commanded open
+     */
+    public boolean isGateOpen() {
+        return gateOpen;
     }
 
     private static double rpmToTicksPerSec(double rpm) {

@@ -19,7 +19,7 @@ public class OuttakeTest extends OpMode {
     @Override
     public void init() {
         outtake = new OuttakeSubsystem(hardwareMap);
-        telemetry.addLine("RB = outtake motor");
+        telemetry.addLine("RB = outtake motor  |  LT hold = open gate");
         telemetry.update();
     }
 
@@ -33,12 +33,14 @@ public class OuttakeTest extends OpMode {
         } else {
             outtake.stopMotor();
         }
+        outtake.setGateOpen(gamepad1.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
 
         outtake.update();
         telemetry.addData("Motor State", outtake.getMotorState());
         telemetry.addData("Left RPM", "%.0f / %.0f", outtake.getLeftRpm(), outtake.getTargetRpm());
         telemetry.addData("Right RPM", "%.0f / %.0f", outtake.getRightRpm(), outtake.getTargetRpm());
         telemetry.addData("At Speed", outtake.atSpeed());
+        telemetry.addData("Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
         telemetry.update();
     }
 
