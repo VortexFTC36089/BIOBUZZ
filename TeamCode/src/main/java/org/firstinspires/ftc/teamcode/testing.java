@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.Servo;
 
-@TeleOp(name = "testing", group = "testing")
+@TeleOp(name = "Test: Hardware Bench", group = RobotConstants.OpModeGroups.TEST)
 public class testing extends LinearOpMode {
 
     // Configured device names matching your exact setup

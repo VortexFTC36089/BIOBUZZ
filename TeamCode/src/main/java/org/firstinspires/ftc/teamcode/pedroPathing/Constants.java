@@ -51,10 +51,10 @@ public final class Constants {
      * Confirm with the Mecanum AutoTuner before trusting it.
      */
     public static MecanumConfig drivetrainConfig = new MecanumConfig(c -> {
-        c.frontLeftName.set("left_front");
-        c.frontRightName.set("right_front");
-        c.backLeftName.set("left_back");
-        c.backRightName.set("right_back");
+        c.frontLeftName.set(RobotConstants.Drive.FRONT_LEFT);
+        c.frontRightName.set(RobotConstants.Drive.FRONT_RIGHT);
+        c.backLeftName.set(RobotConstants.Drive.BACK_LEFT);
+        c.backRightName.set(RobotConstants.Drive.BACK_RIGHT);
         c.frontLeftDirection.set(DcMotorSimple.Direction.REVERSE);
         c.frontRightDirection.set(DcMotorSimple.Direction.FORWARD);
         c.backLeftDirection.set(DcMotorSimple.Direction.REVERSE);
@@ -69,7 +69,7 @@ public final class Constants {
      * fills them in. Do not copy another team's offsets.
      */
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
-        c.name.set("pinpoint");
+        c.name.set(RobotConstants.Localizer.PINPOINT);
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         c.xPodOffset.set(-3.99);// ~~101.357mm got these results using the CAD and The Diagram provided by Pedro Pathing.
         c.yPodOffset.set(-3.76); // ~~95.735mm got these results using the CAD and The Diagram provided by Pedro Pathing.

@@ -16,7 +16,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  * match the requested states. {@link #stop()} stops both motors and is always
  * safe to call from OpMode {@code stop()}.
  *
- * <p>Hardwar e:
+ * <p>Hardware:
  * <ul>
  *   <li>One intake {@link DcMotorEx} named {@link RobotConstants.Intake#MOTOR}</li>
  *   <li>One transfer {@link DcMotorEx} named {@link RobotConstants.Intake#TRANSFER_MOTOR}</li>

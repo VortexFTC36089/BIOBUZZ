@@ -12,8 +12,8 @@ import com.pedropathing.math.Pose;
  *
  * <p>Hardware this file currently assumes:
  * <ul>
- *   <li>Four mecanum drive motors: {@code frontLeft}, {@code frontRight},
- *       {@code backLeft}, {@code backRight}</li>
+ *   <li>Four mecanum drive motors: {@code left_front}, {@code right_front},
+ *       {@code left_back}, {@code right_back}</li>
  *   <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
  *   <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
  *   <li>Two outtake {@link com.qualcomm.robotcore.hardware.DcMotor}s:
@@ -176,12 +176,19 @@ public final class RobotConstants {
          * <p>For a flywheel, feedforward ({@code F}) does most of the work to hold
          * steady-state RPM, and proportional ({@code P}) helps recover speed quickly
          * after a game piece is launched.
+         *
+         * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
-        // TODO(team): tune velocity PIDF gains on the robot
-        public static final double KP = 100.0;
-        public static final double KI = 0.0;
-        public static final double KD = 2.0;
-        public static final double KF = 16.0;
+        // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
+        public static final double LEFT_KP = 100.0;
+        public static final double LEFT_KI = 0.0;
+        public static final double LEFT_KD = 2.0;
+        public static final double LEFT_KF = 16.0;
+
+        public static final double RIGHT_KP = 100.0;
+        public static final double RIGHT_KI = 0.0;
+        public static final double RIGHT_KD = 2.0;
+        public static final double RIGHT_KF = 16.0;
     }
 
     /**
@@ -231,6 +238,36 @@ public final class RobotConstants {
                 SERVO_FREE_SPEED_RPM * 2.0 * Math.PI / 60.0 / GEAR_RATIO;
 
         /**
+         * Servo power at or below which the turret does NOT move (servo dead zone plus
+         * turret friction). The angle estimate treats any command this small as zero
+         * speed, and scales speed linearly from 0 at this power up to full speed at 1.0.
+         *
+         * <p>To measure: command the turret servos at a fixed low power and raise it in
+         * small steps until the turret just starts to turn in both directions; use the
+         * larger of the two values. Too low and the estimate counts movement that never
+         * happened (turret stops tracking slow target motion). Too high and small
+         * corrections overshoot.
+         */
+        // TODO(team): measure on the robot (0.08 is only a placeholder)
+        public static final double SERVO_DEADBAND_POWER = 0.08;
+
+        /**
+         * Smallest power ever sent to the servos while the turret is outside
+         * {@link #ANGLE_TOLERANCE_RADIANS}. Must stay above {@link #SERVO_DEADBAND_POWER}
+         * so every correction actually moves the turret. The margin above the deadband is
+         * deliberate: commands that sit right at the deadband make the angle estimate very
+         * sensitive to any error in the measured deadband. Raising it further makes the
+         * turret step in bigger jumps and it can start to hunt back and forth.
+         */
+        public static final double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
+
+        /**
+         * Time constant (seconds) of the low-pass filter on the target's angular velocity,
+         * which feeds {@link #KV}. Larger is smoother but lags more; 0 turns the filter off.
+         */
+        public static final double TARGET_VELOCITY_FILTER_SECONDS = 0.10;
+
+        /**
          * Turret pivot offset from the robot's localization center in inches
          * (+X is robot forward, +Y is robot left).
          */
@@ -241,6 +278,10 @@ public final class RobotConstants {
         /**
          * The two hive sides in Pedro Pathing inches. The turret aims at the TOP side when the
          * robot is above SIDE_SWITCH_Y_INCHES and at the BOTTOM side when it is below.
+         *
+         * <p>Frame: the same one as {@link Field#START_POSE} and the autonomous paths, with
+         * the origin at a field corner and both axes running 0 to 144 inches (NOT the
+         * center-origin -72 to 72 frame). Every turret target must be given in this frame.
          */
         // TODO(team): replace these placeholders with the real hive coordinates (read them in the Pedro visualizer)
         public static final double TOP_TARGET_X_INCHES = 57.0;
@@ -255,8 +296,8 @@ public final class RobotConstants {
         public static final double SIDE_HYSTERESIS_INCHES = 3.0;
 
         /** Target used before the first pose arrives (the top side). */
-        public static final double DEFAULT_TARGET_X_INCHES = TOP_TARGET_X_INCHES;
-        public static final double DEFAULT_TARGET_Y_INCHES = TOP_TARGET_Y_INCHES;
+        public static final double DEFAULT_TARGET_X_INCHES = BOTTOM_TARGET_X_INCHES;
+        public static final double DEFAULT_TARGET_Y_INCHES = BOTTOM_TARGET_Y_INCHES;
 
         /** Secondary target coordinates, selected with Gamepad 2 Dpad Down in TeleOp. */
         // TODO(team): set secondary target X and Y coordinates in inches
@@ -289,15 +330,23 @@ public final class RobotConstants {
 
         /**
          * Controller gains. Output is servo power per radian of error. There is no real
-         * feedback, so keep it simple: mostly KP. KD, KV and KF are 0 because the angle is
-         * only an estimate and extra terms just add noise.
+         * feedback, so keep it simple: mostly KP. KD is 0 because the angle is only an
+         * estimate and a derivative term just adds noise.
+         *
+         * <p>KF is the static breakaway feedforward: it is added in the direction of the
+         * error whenever the turret is outside tolerance, so the proportional term works
+         * on top of the power needed just to start moving.
+         *
+         * <p>KV is the velocity feedforward (power per rad/s of target motion). It is off
+         * (0). To make the turret keep pace with a moving target instead of trailing it,
+         * set it to {@code (1 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER}.
          */
         // TODO(team): tune on the robot
         public static final double KP = 1.0;
         public static final double KI = 0.0;
         public static final double KD = 0.0;
         public static final double KV = 0.0;
-        public static final double KF = 0.0;
+        public static final double KF = SERVO_DEADBAND_POWER;
 
         /** Maximum integral accumulation (radians * seconds). */
         public static final double MAX_INTEGRAL = 0.5;

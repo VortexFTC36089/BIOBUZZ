@@ -63,8 +63,17 @@ public class OuttakeSubsystem {
         rightMotor.setDirection(DcMotorEx.Direction.REVERSE);
 
         // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
-        configureVelocityControl(leftMotor);
-        configureVelocityControl(rightMotor);
+        // Each motor gets its own gains.
+        configureVelocityControl(leftMotor,
+                RobotConstants.Outtake.LEFT_KP,
+                RobotConstants.Outtake.LEFT_KI,
+                RobotConstants.Outtake.LEFT_KD,
+                RobotConstants.Outtake.LEFT_KF);
+        configureVelocityControl(rightMotor,
+                RobotConstants.Outtake.RIGHT_KP,
+                RobotConstants.Outtake.RIGHT_KI,
+                RobotConstants.Outtake.RIGHT_KD,
+                RobotConstants.Outtake.RIGHT_KF);
 
         motorState = MotorState.OFF;
         targetRpm = 0.0;
@@ -75,15 +84,10 @@ public class OuttakeSubsystem {
         rightMotor.setPower(0.0);
     }
 
-    private void configureVelocityControl(DcMotorEx motor) {
+    private void configureVelocityControl(DcMotorEx motor, double kP, double kI, double kD, double kF) {
         motor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
         motor.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        motor.setVelocityPIDFCoefficients(
-                RobotConstants.Outtake.KP,
-                RobotConstants.Outtake.KI,
-                RobotConstants.Outtake.KD,
-                RobotConstants.Outtake.KF
-        );
+        motor.setVelocityPIDFCoefficients(kP, kI, kD, kF);
     }
 
     /**

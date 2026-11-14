@@ -14,10 +14,11 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import static com.pedropathing.api.Paths.line;
 
 /**
- * Match TeleOp: mecanum drive through Pedro's follower, plus the intake.
+ * Match TeleOp: mecanum drive through Pedro's follower, plus intake, transfer,
+ * velocity-controlled dual outtake, two-position servo, and field-aimed turret.
  *
- * <p>Gamepad 1 drives and runs the intake so a single driver can test the
- * robot. Bindings are listed in {@link #init()} telemetry.
+ * <p>Gamepad 1 drives; Gamepad 2 runs the scoring mechanisms. Bindings are
+ * listed in {@link #init()} telemetry.
  *
  * <p>Hardware: four mecanum motors and Pinpoint from {@link Constants}, plus
  * the intake, outtake, two-position servo, and two turret servos from
@@ -43,7 +44,6 @@ public class MainTeleOp extends OpMode {
     private Servo servo;
 
     private final ToggleButton fieldCentricToggle = new ToggleButton();
-    private final ToggleButton intakeLatchToggle = new ToggleButton();
     private final ToggleButton homeToggle = new ToggleButton();
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
@@ -53,12 +53,12 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton turretHomeToggle = new ToggleButton();
 
     private boolean fieldCentric;
-    private boolean intakeLatched;
+    private double fieldCentricOffsetRad;
     private boolean drivingToHome;
     private boolean servoAtPositionB;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
-    private double lastLoopNanos;
+    private long lastLoopNanos;
 
     /**
      * Builds the follower and intake. Drive commands start in {@link #loop()}
@@ -69,10 +69,11 @@ public class MainTeleOp extends OpMode {
     public void init() {
         follower = Constants.create(hardwareMap);
 
-        // Pick up the pose where autonomous ended so TeleOp knows where the
-        // robot is on the field. If no auto has run yet, fall back to START_POSE.
         boolean poseFromAuto = PoseStorage.lastAutoPose != null;
         follower.setPose(poseFromAuto ? PoseStorage.lastAutoPose : RobotConstants.Field.START_POSE);
+
+        fieldCentric = false;
+        fieldCentricOffsetRad = 0.0;
 
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
@@ -100,8 +101,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("Main TeleOp ready");
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
-        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  Back = reset heading  |  Y drive home");
-        telemetry.addLine("G1: A = toggle servo A/B");
+        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  X = field-centric  |  LB hold = slow");
+        telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home  |  A = servo A/B");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake");
         if (TURRET_ENABLED) {
@@ -114,11 +115,15 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Resets the loop-time clock when the driver presses Play.
+     * Resets the loop-time and turret clocks when the driver presses Play so
+     * the time spent sitting in init does not show up on the first loop.
      */
     @Override
     public void start() {
         lastLoopNanos = System.nanoTime();
+        if (turret != null) {
+            turret.resetAngle();
+        }
     }
 
     /**
@@ -127,12 +132,10 @@ public class MainTeleOp extends OpMode {
     @Override
     public void loop() {
         // ---- Read gamepad ----
-        // Official Pedro 3 TeleOp signs (pedropathing.com teleop-usage):
+        // Gamepad stick signs:
         // forward = -left_y (up on the stick is negative in FTC),
-        // strafe  = +left_x (right is positive; Pedro's +Y is left, and
-        //            ManualDrive / mecanum handle that internally),
-        // turn    = +right_x (right stick right = clockwise / negative
-        //            heading in FTC... Pedro documents this un-negated).
+        // strafe  = -left_x (left on the stick -> +Y left in Pedro),
+        // turn    = -right_x (right on the stick -> clockwise / -heading).
         double forward = -gamepad1.left_stick_y;
         double strafe = -gamepad1.left_stick_x;
         double turn = -gamepad1.right_stick_x;
@@ -151,26 +154,33 @@ public class MainTeleOp extends OpMode {
             );
         }
 
-        boolean slowMode = false;
+        if (fieldCentricToggle.update(gamepad1.x)) {
+            fieldCentric = !fieldCentric;
+        }
+
+        // Check for driver cancel BEFORE scaling by activeSpeed so the stick
+        // cancel threshold stays the same in slow mode and at low speed settings.
+        if (drivingToHome && driverIsMoving(forward, strafe, turn)) {
+            drivingToHome = false;
+        }
+
+        boolean slowMode = gamepad1.left_bumper;
         double activeSpeed = slowMode ? RobotConstants.Drive.SLOW_MODE_MULTIPLIER : speedMultiplier;
         forward *= activeSpeed;
         strafe *= activeSpeed;
         turn *= activeSpeed;
 
         // Back (not Start) so we do not fight the Driver Station's Start
-        // "emergency" habit. Sets heading to 0 while keeping x/y, so
-        // field-centric "forward" becomes the way the robot is facing now.
+        // "emergency" habit. Records the current field heading as field-centric
+        // "forward" WITHOUT calling follower.setPose(...) — overwriting the
+        // localizer heading would throw off the turret's field aiming.
         if (gamepad1.back) {
-            Pose pose = follower.pose();
-            follower.setPose(new Pose(pose.x(), pose.y(), 0.0));
+            fieldCentricOffsetRad = follower.pose().heading();
         }
 
         // ---- Optional drive-to-home ----
         if (homeToggle.update(gamepad1.y)) {
             startDriveToHome();
-        }
-        if (drivingToHome && driverIsMoving(forward, strafe, turn)) {
-            drivingToHome = false;
         }
 
         // ---- Drive ----
@@ -273,8 +283,8 @@ public class MainTeleOp extends OpMode {
      * Sends stick values to Pedro using robot-centric or field-centric math.
      *
      * @param forward forward power in [-1, 1], robot-centric before conversion
-     * @param strafe  lateral power in [-1, 1], right positive
-     * @param turn    heading power in [-1, 1], right positive
+     * @param strafe  lateral power in [-1, 1], left positive (+Y in Pedro)
+     * @param turn    heading power in [-1, 1], counterclockwise positive
      */
     private void commandManualDrive(double forward, double strafe, double turn) {
         if (fieldCentric) {
@@ -282,7 +292,8 @@ public class MainTeleOp extends OpMode {
                     forward,
                     strafe,
                     turn,
-                    follower.pose().heading()
+                    follower.pose().heading(),
+                    -fieldCentricOffsetRad
             );
             follower.manual(powers);
         } else {
@@ -379,11 +390,7 @@ public class MainTeleOp extends OpMode {
             telemetry.addData("Turret mode", turret.getMode());
             telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
             telemetry.addData("Target distance (in)", "%.1f", turret.getDistanceToTarget(pose));
-            telemetry.addData("Turret angle (deg)", "%.1f -> %.1f",
-                    turret.getCurrentAngleDegrees(), turret.getTargetAngleDegrees());
-            telemetry.addData("Turret error (deg)", "%.2f (onTarget=%b)",
-                    turret.getAngleErrorDegrees(), turret.isOnTarget());
-            telemetry.addData("Turret power", "%.2f", turret.getLastCommandedPower());
+            turret.addTelemetry(telemetry);
         } else {
             telemetry.addData("Turret", "DISABLED");
         }

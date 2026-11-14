@@ -1,6 +1,6 @@
 # BIOBUZZ robot code
 
-Fork of FIRST’s official [FtcRobotController](https://github.com/FIRST-Tech-Challenge/FtcRobotController) SDK **12.0** (BIOBUZZ 2026–2027), plus this team’s OpModes and **Pedro Pathing 3.0.1**.
+Fork of FIRST’s official [FtcRobotController](https://github.com/FIRST-Tech-Challenge/FtcRobotController) SDK **12.0** (BIOBUZZ 2026–2027), plus this team’s OpModes and **Pedro Pathing 3.0.2** with **Ivy 1.1.1**.
 
 All team Java lives in `TeamCode/`. Do not edit `FtcRobotController/` except when upgrading the SDK.
 
@@ -18,16 +18,17 @@ Use these names exactly. They are stored in `RobotConstants`.
 
 | Device | Type | Config name |
 |---|---|---|
-| Front left drive | Motor | `frontLeft` |
-| Front right drive | Motor | `frontRight` |
-| Back left drive | Motor | `backLeft` |
-| Back right drive | Motor | `backRight` |
+| Front left drive | Motor | `left_front` |
+| Front right drive | Motor | `right_front` |
+| Back left drive | Motor | `left_back` |
+| Back right drive | Motor | `right_back` |
 | Intake | Motor | `intake` |
 | Transfer | Motor | `transfer` |
 | Left outtake | Motor | `outtake_left` |
 | Right outtake | Motor | `outtake_right` |
 | Turret left | CR Servo | `turretServoLeft` |
 | Turret right | CR Servo | `turretServoRight` |
+| Flower servo | Servo | `flower` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
 Pinpoint wiring (from Pedro docs):
@@ -62,14 +63,17 @@ Team code is one package. The only extra folder is `pedroPathing/`, which holds 
 
 ```
 TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
-├── RobotConstants.java          Hardware names and powers
-├── MainTeleOp.java              Match drive + intake
-├── IntakeSubsystem.java         Intake motor
-├── OuttakeSubsystem.java        Outtake motor + servo gate
-├── IntakeTest.java              Intake-only test
-├── OuttakeTest.java             Outtake motor + servo gate test
-├── DrivetrainDirectionTest.java Spin one wheel at a time
+├── RobotConstants.java          Hardware names, powers, PIDF gains, field targets
+├── MainTeleOp.java              Match drive + intake/transfer/outtake/servo/turret
+├── MainAuto.java                Autonomous path (Pedro + Ivy)
+├── PoseStorage.java             Hands ending auto pose to TeleOp
+├── IntakeSubsystem.java         Intake + transfer motors
+├── OuttakeSubsystem.java        Dual velocity-controlled outtake motors
 ├── TurretSubsystem.java         Two-servo turret aimed from the Pedro pose
+├── IntakeTest.java              Intake + transfer test
+├── OuttakeTest.java             Outtake RPM test
+├── MotorPidfFinder.java         Change a motor's velocity PIDF live from the gamepad
+├── DrivetrainDirectionTest.java Spin one wheel at a time
 ├── ToggleButton.java            Press-once helper
 └── pedroPathing/                Constants, Tuning, AutoTune procedures
 ```
@@ -89,9 +93,13 @@ SDK samples stay in `FtcRobotController/.../external/samples/` and are already `
 
 | Name | Group | What it does |
 |---|---|---|
-| **Main TeleOp** | TeleOp | Match drive + intake |
-| **Test: Intake** | Test | Only the intake motor |
+| **AutoPath** | Auto | Autonomous path (Pedro + Ivy), hands final pose to TeleOp |
+| **Main TeleOp** | TeleOp | Match drive + intake, transfer, outtake, servo, turret |
+| **Test: Intake** | Test | Intake and transfer motors |
+| **Test: Outtake** | Test | Dual outtake motors at `Outtake.TARGET_RPM` |
+| **Test: Motor PIDF Finder** | Test | Live velocity PIDF tuner for the shooter motors |
 | **Test: Drive Directions** | Test | Spin one wheel at a time (A/B/X/Y) |
+| **Test: Hardware Bench** | Test | Generic motor/servo bench tester (`motor_0..3`, `servo_1..3`) |
 | Pedro AutoTune | Browser | See section 6 (not a normal DS list item) |
 
 Safe order the first time you have a robot: **Test: Drive Directions** → **Test: Intake** → **Main TeleOp** on a stand → **Main TeleOp** on the floor.
@@ -105,9 +113,11 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Left stick | Forward / strafe |
 | Right stick X | Turn |
 | Dpad Up / Down | Drive speed +10% / -10% |
-| Back | Reset heading to 0 (keeps x/y) |
+| Left bumper (hold) | Slow mode (30%) |
+| X | Toggle field-centric drive |
+| Back | Set current heading as field-centric forward (preserves localizer pose for turret) |
 | A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` |
-| Y | Follow a line to the home pose (cancels if you move a stick) |
+| Y | Follow a line to the score pose (cancels if you move a stick) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
 
@@ -122,9 +132,9 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: toggle HOME override (return to starting angle) |
 
-The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos with no encoder. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves. Its angle is estimated from commanded power and time, so it must point straight forward when the OpMode is initialized. The speed used for that estimate comes from `Turret.SERVO_FREE_SPEED_RPM` (from the servo spec sheet) divided by `Turret.GEAR_RATIO`.
+The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos with no encoder. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves. Its angle is estimated from commanded power and time, so it must point straight forward when the OpMode is initialized. The speed used for that estimate comes from `Turret.SERVO_FREE_SPEED_RPM` (from the servo spec sheet) divided by `Turret.GEAR_RATIO`. Commands at or below `Turret.SERVO_DEADBAND_POWER` are counted as no movement, so that value must be measured on the robot: the turret only tracks slow target motion (driving in X/Y) if it is right.
 
-Stick signs follow Pedro’s TeleOp guide: `-left_y`, `+left_x`, `+right_x`.
+Stick signs: `forward = -left_y`, `strafe = -left_x`, `turn = -right_x`.
 
 Pedro owns the drive motors. TeleOp calls `Constants.create(hardwareMap)`, then `follower.manual(...)` and `follower.update()` every loop. We do not write our own mecanum math.
 
@@ -132,9 +142,9 @@ Pedro owns the drive motors. TeleOp calls `Constants.create(hardwareMap)`, then 
 
 ## 5. Pedro in one paragraph
 
-Pedro is a library that knows where the robot is (Pinpoint) and can drive from sticks or follow paths. Create a follower with `Constants.create(hardwareMap)` (or `createFollower`). Call `follower.update()` every loop. Pose **x/y are inches**, **heading is radians**. On the field, **+X is forward** and **+Y is left**.
+Pedro is a library that knows where the robot is (Pinpoint) and can drive from sticks or follow paths. Create a follower with `Constants.create(hardwareMap)`. Call `follower.update()` every loop. Pose **x/y are inches**, **heading is radians**. On the field, **+X is forward** and **+Y is left**.
 
-This is Pedro **3.0.2** (`com.pedropathing:revhub:3.0.1` + `com.pedropathing:tuning:1.0.1`). It is not the old 2.x `FollowerBuilder` API.
+This is Pedro **3.0.2** (`com.pedropathing:revhub:3.0.2` + `com.pedropathing:tuning:1.0.0` + `com.pedropathing.ivy:pedro:1.1.1`). It is not the old 2.x `FollowerBuilder` API.
 
 ---
 
@@ -159,10 +169,9 @@ Then run the tuners **in this order**. After each one, paste the generated Java 
 Docs: https://pedropathing.com/docs/pathing/tuning/drivetrain/mecanum
 
 - [ ] Run **Mecanum Tuner**
-- [ ] Enter `frontLeft`, `frontRight`, `backLeft`, `backRight`
+- [ ] Enter `left_front`, `right_front`, `left_back`, `right_back`
 - [ ] For each wheel, mark forward or reversed
 - [ ] Paste `MecanumConfig` into `Constants.java`
-- [ ] Keep `c.manualBrakeMode.set(true)`
 
 ### 2. Pinpoint localization
 
@@ -202,7 +211,7 @@ Docs: https://pedropathing.com/docs/pathing/tuning/foresight
 
 Put new OpModes and mechanisms next to `MainTeleOp.java`. Add hardware names to `RobotConstants`. Pedro numbers go in `pedroPathing/Constants.java`.
 
-Never hardcode `"frontLeft"` or `0.8` in an OpMode.
+Never hardcode `"left_front"` or `0.8` in an OpMode.
 
 ### Naming
 

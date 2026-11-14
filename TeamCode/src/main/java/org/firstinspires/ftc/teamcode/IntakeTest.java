@@ -21,7 +21,7 @@ public class IntakeTest extends OpMode {
     @Override
     public void init() {
         intake = new IntakeSubsystem(hardwareMap);
-        telemetry.addLine("RT = intake, LT = reverse intake, A = transfer");
+        telemetry.addLine("RT = intake, LT = reverse intake, A = transfer, B = reverse transfer");
         telemetry.update();
     }
 
@@ -40,6 +40,8 @@ public class IntakeTest extends OpMode {
 
         if (gamepad1.a) {
             intake.transfer();
+        } else if (gamepad1.b) {
+            intake.reverseTransfer();
         } else {
             intake.stopTransfer();
         }

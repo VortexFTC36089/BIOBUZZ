@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 /**
@@ -18,7 +19,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *   <li>Two {@link CRServo}s ({@code SERVO_LEFT}, {@code SERVO_RIGHT}) that BOTH push the
  *       turret in the same direction (set the reversed flags in RobotConstants).</li>
  *   <li>NO encoder. The turret angle is an ESTIMATE: commanded power x time x a calibrated
- *       speed. It can drift, so the turret must start pointing straight forward, and
+ *       speed, with commands at or below the servo deadband counted as no movement. It can
+ *       drift, so the turret must start pointing straight forward, and
  *       {@link #resetAngle()} re-zeroes the estimate whenever it is physically at home.</li>
  * </ul>
  */
@@ -87,6 +89,15 @@ public class TurretSubsystem {
             firstUpdate = true;
             timer.reset();
         }
+
+        /**
+         * Restarts the loop timing but KEEPS the integral. Call while the output is idle
+         * (turret aimed) so the next {@link #calculate} does not see a stale time step.
+         */
+        public void resetTiming() {
+            firstUpdate = true;
+            timer.reset();
+        }
     }
 
     private final CRServo leftServo;
@@ -130,10 +141,12 @@ public class TurretSubsystem {
 
     // Internal tracking state
     private double previousTargetAngleRad = 0.0;
+    private double targetAngularVelocityRadSec = 0.0; // low-pass filtered
     private boolean firstTargetSample = true;
     private boolean enabled = true;
 
     private double currentAngleRad = 0.0;
+    private double targetGlobalAngleRad = 0.0;
     private double relativeTargetAngleRad = 0.0;
     private double angleErrorRad = 0.0;
     private double lastCommandedPower = 0.0;
@@ -171,11 +184,32 @@ public class TurretSubsystem {
         estimateTimer.reset();
     }
 
-    /** Integrates the last commanded power over the elapsed time to estimate the turret angle. */
+    /**
+     * Integrates the turret speed produced by the last commanded power over the elapsed
+     * time to estimate the turret angle.
+     */
     private void updateEstimate() {
         double dt = Range.clip(estimateTimer.seconds(), 0.0, 0.1);
         estimateTimer.reset();
-        estimatedAngleRad += lastCommandedPower * radPerSecAtFullPower * dt;
+        estimatedAngleRad += effectiveSpeedFraction(lastCommandedPower) * radPerSecAtFullPower * dt;
+    }
+
+    /**
+     * Fraction of full turret speed the servos actually produce for a commanded power.
+     * At or below {@link RobotConstants.Turret#SERVO_DEADBAND_POWER} the turret is stalled,
+     * so the speed is 0 and the estimate does not advance. Above it, speed rises linearly
+     * from 0 at the deadband to full speed at power 1.0.
+     *
+     * @param power commanded servo power in [-1, 1]
+     * @return signed speed fraction in [-1, 1]
+     */
+    private static double effectiveSpeedFraction(double power) {
+        double deadband = RobotConstants.Turret.SERVO_DEADBAND_POWER;
+        double magnitude = Math.abs(power);
+        if (magnitude <= deadband) {
+            return 0.0;
+        }
+        return Math.signum(power) * (magnitude - deadband) / (1.0 - deadband);
     }
 
     /**
@@ -216,8 +250,8 @@ public class TurretSubsystem {
         double turretWorldY = robotY + (xOffsetInches * sinH + yOffsetInches * cosH);
 
         // 2. Global angle to hive -> chassis-relative angle in [-PI, PI]
-        double targetGlobalAngle = Math.atan2(targetYInches - turretWorldY, targetXInches - turretWorldX);
-        double relativeTargetAngle = AngleUnit.normalizeRadians(targetGlobalAngle - robotHeading);
+        targetGlobalAngleRad = Math.atan2(targetYInches - turretWorldY, targetXInches - turretWorldX);
+        double relativeTargetAngle = AngleUnit.normalizeRadians(targetGlobalAngleRad - robotHeading);
 
         driveToRelativeAngle(relativeTargetAngle);
     }
@@ -228,15 +262,20 @@ public class TurretSubsystem {
         }
         relativeTargetAngleRad = relativeTargetAngle;
 
-        // Target angular velocity (rad/s) for optional kV feedforward
+        // Target angular velocity (rad/s) for kV feedforward. It is capped at the turret's
+        // top speed and low-pass filtered, so one jittery loop time or a target switch
+        // cannot spike the feedforward.
         double dt = targetVelTimer.seconds();
         targetVelTimer.reset();
-        double targetAngularVelocityRadSec = 0.0;
         if (!firstTargetSample && dt > 1e-4 && dt <= 0.5) {
-            targetAngularVelocityRadSec =
-                    AngleUnit.normalizeRadians(relativeTargetAngleRad - previousTargetAngleRad) / dt;
+            double rawVelocity = Range.clip(
+                    AngleUnit.normalizeRadians(relativeTargetAngleRad - previousTargetAngleRad) / dt,
+                    -radPerSecAtFullPower, radPerSecAtFullPower);
+            double alpha = dt / (RobotConstants.Turret.TARGET_VELOCITY_FILTER_SECONDS + dt);
+            targetAngularVelocityRadSec += alpha * (rawVelocity - targetAngularVelocityRadSec);
         } else {
             firstTargetSample = false;
+            targetAngularVelocityRadSec = 0.0;
         }
         previousTargetAngleRad = relativeTargetAngleRad;
 
@@ -254,14 +293,23 @@ public class TurretSubsystem {
             }
         }
 
-        if (Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS
-                && Math.abs(targetAngularVelocityRadSec) < 0.05) {
-            pidfController.reset();
+        // Aimed: stop the servos. This depends only on the error, not on how fast the
+        // target is moving, and it keeps the integral so a slowly moving target does not
+        // restart the controller from zero every time the turret catches up.
+        if (Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS) {
+            pidfController.resetTiming();
             setServoPower(0.0);
             return;
         }
 
         double rawPower = pidfController.calculate(angleErrorRad, targetAngularVelocityRadSec, kV);
+
+        // Outside tolerance, never send a command too weak to move the turret: push
+        // toward the target with at least the minimum power that beats stiction.
+        double minPower = RobotConstants.Turret.MIN_COMMAND_POWER;
+        if (Math.abs(rawPower) < minPower) {
+            rawPower = Math.signum(angleErrorRad) * minPower;
+        }
 
         // Hard cutoff if already at/beyond a soft limit and still pushing outward
         if (useSoftLimits) {
@@ -422,6 +470,35 @@ public class TurretSubsystem {
 
     public double getLastCommandedPower() {
         return lastCommandedPower;
+    }
+
+    /**
+     * @return field angle (degrees) from the turret pivot to the target, as of the last
+     *         {@link #update(Pose)} in TRACKING mode. This is the number that must change
+     *         when the robot translates.
+     */
+    public double getTargetGlobalDegrees() {
+        return Math.toDegrees(targetGlobalAngleRad);
+    }
+
+    /**
+     * Adds the turret aiming diagnostics to the Driver Station. The caller still calls
+     * {@code telemetry.update()}.
+     *
+     * <ul>
+     *   <li>{@code targetGlobalDeg}: field angle from the turret to the target</li>
+     *   <li>{@code relativeTargetDeg}: that angle relative to the chassis (where the turret should point)</li>
+     *   <li>{@code estimatedAngleDeg}: where the turret thinks it points (dead-reckoned, no encoder)</li>
+     *   <li>{@code angleErrorDeg}: relative target minus estimate, shortest path</li>
+     *   <li>{@code lastCommandedPower}: power sent to both servos this loop</li>
+     * </ul>
+     */
+    public void addTelemetry(Telemetry telemetry) {
+        telemetry.addData("Turret targetGlobalDeg", "%.1f", getTargetGlobalDegrees());
+        telemetry.addData("Turret relativeTargetDeg", "%.1f", getTargetAngleDegrees());
+        telemetry.addData("Turret estimatedAngleDeg", "%.1f", getCurrentAngleDegrees());
+        telemetry.addData("Turret angleErrorDeg", "%.2f (onTarget=%b)", getAngleErrorDegrees(), isOnTarget());
+        telemetry.addData("Turret lastCommandedPower", "%.2f", lastCommandedPower);
     }
 
     public boolean isOnTarget() {

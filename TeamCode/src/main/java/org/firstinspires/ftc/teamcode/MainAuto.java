@@ -1,16 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 
-import static com.pedropathing.api.Paths.*;
 import com.pedropathing.api.Paths;
-
 import com.pedropathing.api.PoseFactory;
 import com.pedropathing.follower.Follower;
-import com.pedropathing.math.Pose;
-import com.pedropathing.paths.Path;
 import com.pedropathing.ivy.Command;
 import com.pedropathing.ivy.Scheduler;
+import com.pedropathing.math.Pose;
+import com.pedropathing.paths.Path;
 import static com.pedropathing.ivy.Scheduler.schedule;
-import static com.pedropathing.ivy.commands.Commands.*;
 import static com.pedropathing.ivy.groups.Groups.sequential;
 import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -18,14 +15,21 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "AutoPath", group = "Autonomous")
+/**
+ * Autonomous path OpMode built with Pedro Pathing 3 and Ivy.
+ *
+ * <p>Starts at {@link RobotConstants.Field#START_POSE}, follows {@link #path1()},
+ * and stores the live pose in {@link PoseStorage#lastAutoPose} so
+ * {@link MainTeleOp} knows where the robot ended.
+ */
+@Autonomous(name = "AutoPath", group = RobotConstants.OpModeGroups.AUTO, preselectTeleOp = "Main TeleOp")
 public class MainAuto extends LinearOpMode {
 
     private Follower follower;
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
-    private final Pose start = poseFactory.of(56, 8, 90);
+    private final Pose start = RobotConstants.Field.START_POSE;
     private final Pose path1 = poseFactory.of(56, 28.059, 180);
 
     // Autonomous routine
@@ -43,22 +47,37 @@ public class MainAuto extends LinearOpMode {
         follower.update();
 
         waitForStart();
+        if (isStopRequested()) {
+            return;
+        }
         schedule(autoRoutine());
 
-        while (opModeIsActive()) {
-            follower.update();
-            Scheduler.execute();
+        try {
+            while (opModeIsActive()) {
+                follower.update();
+                Scheduler.execute();
 
-            telemetry.addData("x", follower.pose().x());
-            telemetry.addData("y", follower.pose().y());
-            telemetry.addData("heading", follower.pose().heading());
+                // Hand the live pose to TeleOp so the turret aims from where auto really ended.
+                PoseStorage.lastAutoPose = follower.pose();
 
-            if (follower.currentPath() != null) {
-                telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());
-                telemetry.addData("Path number", follower.pathIndex());
+                telemetry.addData("X (in)", "%.1f", follower.pose().x());
+                telemetry.addData("Y (in)", "%.1f", follower.pose().y());
+                telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(follower.pose().heading()));
+
+                if (follower.currentPath() != null) {
+                    telemetry.addData("Current path distance remaining", "%.1f", follower.distanceToEndpoint());
+                    telemetry.addData("Path number", follower.pathIndex());
+                }
+
+                telemetry.update();
             }
-
-            telemetry.update();
+        } finally {
+            Scheduler.reset();
+            if (follower != null) {
+                PoseStorage.lastAutoPose = follower.pose();
+                follower.manual(0.0, 0.0, 0.0);
+                follower.update();
+            }
         }
     }
 
