@@ -26,12 +26,15 @@ public class MainAuto extends LinearOpMode {
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
     private final Pose start = poseFactory.of(56, 8, 90);
-    private final Pose path1 = poseFactory.of(56, 28, 90);
+    private final Pose point1 = poseFactory.of(22.8271, 72.1197, 90);
+    private final Pose point1Control1 = poseFactory.of(14.6934, 32.8084, 0);
+    private final Pose point2 = poseFactory.of(23.0003, 40.4856, 90.3137);
 
     // Autonomous routine
     public Command autoRoutine() {
         return sequential(
-                follow(follower, path1())
+                follow(follower, path1()),
+                follow(follower, path2())
         );
     }
 
@@ -63,6 +66,10 @@ public class MainAuto extends LinearOpMode {
     }
 
     public Path path1() {
-        return Paths.line(start, path1).linear(start, path1);
+        return Paths.curve(start, point1Control1, point1).linear(start, point1);
+    }
+
+    public Path path2() {
+        return Paths.line(point1, point2).reverseTangent();
     }
 }

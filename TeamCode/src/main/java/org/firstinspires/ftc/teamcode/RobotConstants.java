@@ -163,7 +163,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 1870;
+        public static final double TARGET_RPM = 2000;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -180,14 +180,14 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 100.0;
+        public static final double LEFT_KP = 155.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 100.0;
+        public static final double RIGHT_KP = 155.0;
         public static final double RIGHT_KI = 0.0;
-        public static final double RIGHT_KD = 2.0;
+        public static final double RIGHT_KD = 1.0;
         public static final double RIGHT_KF = 10.0;
 
         /**
@@ -198,7 +198,7 @@ public final class RobotConstants {
         public static final String GATE_SERVO = "outtake_gate";
         // TODO(team): set both gate positions on the robot (0.0 to 1.0)
         public static final double GATE_CLOSED_POSITION = 0;
-        public static final double GATE_OPEN_POSITION = .3;
+        public static final double GATE_OPEN_POSITION = .212;
     }
 
     /**
@@ -235,8 +235,9 @@ public final class RobotConstants {
          * Spec sheets usually give seconds per 60 degrees: RPM = 10 / (seconds per 60 degrees).
          * Use the figure for the voltage the servos actually run at.
          */
-        // TODO(team): set from the servo spec sheet (105 is only a placeholder)
-        public static final double SERVO_FREE_SPEED_RPM = 105.0;
+        // 230 servo RPM / 2.75 = 83.63 RPM at the turret (goBILDA Super Speed, near no load).
+        // Do not lower this back to a placeholder: too low makes the turret overshoot.
+        public static final double SERVO_FREE_SPEED_RPM = 230.0;
 
         /**
          * Turret speed (radians/second) at power 1.0, assuming speed is proportional to power.
@@ -336,7 +337,7 @@ public final class RobotConstants {
 
         /** Servo power cap in [0, 1]. Start low (0.5) for first tests, raise after tuning. */
         // TODO(team): raise once the turret behaves
-        public static final double MAX_POWER = 0.5;
+        public static final double MAX_POWER = 0.9;
 
         /**
          * Controller gains. Output is servo power per radian of error. There is no real
@@ -379,7 +380,7 @@ public final class RobotConstants {
          * First pose. Used at init so the mechanism starts in a known place.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_A = 0.5;
+        public static final double POSITION_A = 0.3;
 
         /**
          * Second pose.
@@ -399,7 +400,8 @@ public final class RobotConstants {
     public static final class Field {
         // TODO(team): replace with measured field poses after localization is tuned
         public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
-        public static final Pose START_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
+        public static final Pose START_POSE = new Pose(56, 8, Math.toRadians(90.0));
+        public static final Pose OPPOSE_POSE = new Pose(56, 136, Math.toRadians(270.0));
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
         public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));

@@ -35,7 +35,7 @@ public class MainTeleOp extends OpMode {
      * {@code false} the two turret servos are never touched (no hardware
      * lookup, no power), so TeleOp runs fine without them configured.
      */
-    private static final boolean TURRET_ENABLED = true;
+    private static final boolean TURRET_ENABLED = false;
 
     private Follower follower;
     private TurretSubsystem turret;
@@ -104,7 +104,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  X = field-centric  |  LB hold = slow");
         telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home  |  A = servo A/B");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
-        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  RT hold = outtake  |  LT hold = open gate");
+        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  LT hold = open gate");
+        telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (TURRET_ENABLED) {
             telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret HOME");
             telemetry.addLine("Turret must be pointing straight forward now (no encoder)");
@@ -179,8 +180,13 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Optional drive-to-home ----
-        if (homeToggle.update(gamepad1.y)) {
-            startDriveToHome();
+        if (homeToggle.update(gamepad1.x)) {
+            startDriveToStart();
+        }
+
+        // ---- Optional drive-to-home ----
+        if (homeToggle.update(gamepad1.b)) {
+            startDriveToOppose();
         }
 
         // ---- Drive ----
@@ -254,9 +260,24 @@ public class MainTeleOp extends OpMode {
      * <p>If the robot is already at {@code SCORE_POSE}, a zero-length line path
      * cannot be constructed, so it simply holds the score pose instead.
      */
-    private void startDriveToHome() {
+    private void startDriveToStart() {
         Pose current = follower.pose();
-        Pose home = RobotConstants.Field.SCORE_POSE;
+        Pose home = RobotConstants.Field.START_POSE;
+
+        if (current.distance(home) < 0.5) {
+            follower.hold(home);
+            drivingToHome = false;
+            return;
+        }
+
+        Path homePath = line(current, home).linear(current, home);
+        follower.follow(homePath);
+        drivingToHome = true;
+    }
+
+    private void startDriveToOppose() {
+        Pose current = follower.pose();
+        Pose home = RobotConstants.Field.START_POSE;
 
         if (current.distance(home) < 0.5) {
             follower.hold(home);
@@ -324,16 +345,13 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Holding the right trigger spins the outtake up to the fixed
-     * {@link RobotConstants.Outtake#TARGET_RPM}. Holding the left trigger
-     * opens the outtake gate; releasing it closes the gate.
+     * The outtake flywheels run at the fixed
+     * {@link RobotConstants.Outtake#TARGET_RPM} the whole time TeleOp is
+     * running (from Play until Stop). Holding the left trigger opens the
+     * outtake gate; releasing it closes the gate.
      */
     private void updateOuttakeFromGamepad() {
-        if (gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
-            outtake.outtake();
-        } else {
-            outtake.stopMotor();
-        }
+        outtake.outtake();
 
         outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
     }
