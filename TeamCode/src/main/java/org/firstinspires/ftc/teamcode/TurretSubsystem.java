@@ -110,13 +110,20 @@ public class TurretSubsystem {
     public enum TurretMode {
         /** Continuously aims at the field target coordinate. */
         TRACKING,
-        /** Returns to and holds {@link RobotConstants.Turret#HOME_ANGLE_RADIANS}. */
+        /**
+         * Turns to and holds a fixed chassis-relative angle
+         * ({@link RobotConstants.Turret#HOME_ANGLE_RADIANS} unless changed with
+         * {@link #setHomeAngle(double)}).
+         */
         HOME,
         /** Servos unpowered. */
         DISABLED
     }
 
     private TurretMode mode = TurretMode.TRACKING;
+
+    /** Chassis-relative angle (radians) held while in {@link TurretMode#HOME}. */
+    private double homeAngleRad = RobotConstants.Turret.HOME_ANGLE_RADIANS;
 
     // Geometry & servo speed model
     private double xOffsetInches = RobotConstants.Turret.OFFSET_X_INCHES;
@@ -227,7 +234,7 @@ public class TurretSubsystem {
         }
 
         if (mode == TurretMode.HOME) {
-            driveToRelativeAngle(RobotConstants.Turret.HOME_ANGLE_RADIANS);
+            driveToRelativeAngle(homeAngleRad);
             return;
         }
 
@@ -390,6 +397,16 @@ public class TurretSubsystem {
         if (mode == TurretMode.DISABLED) {
             stop();
         }
+    }
+
+    /**
+     * Sets the chassis-relative angle the turret holds in {@link TurretMode#HOME}
+     * (0 = straight forward, positive = counterclockwise / left).
+     *
+     * @param angleRadians angle to hold, in radians
+     */
+    public void setHomeAngle(double angleRadians) {
+        this.homeAngleRad = angleRadians;
     }
 
     public TurretMode getMode() {

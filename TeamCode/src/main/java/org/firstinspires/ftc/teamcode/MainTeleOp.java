@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode;
 import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.ManualDrive;
+import com.pedropathing.ivy.Command;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -12,6 +13,11 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import static com.pedropathing.api.Paths.line;
+import static com.pedropathing.ivy.commands.Commands.instant;
+import static com.pedropathing.ivy.commands.Commands.waitMs;
+import static com.pedropathing.ivy.commands.Commands.waitUntil;
+import static com.pedropathing.ivy.groups.Groups.race;
+import static com.pedropathing.ivy.groups.Groups.sequential;
 
 /**
  * Match TeleOp: mecanum drive through Pedro's follower, plus intake, transfer,
@@ -37,6 +43,14 @@ public class MainTeleOp extends OpMode {
      */
     private static final boolean TURRET_ENABLED = false;
 
+    /**
+     * Set to {@code true} to bring back the two-position {@code flower} servo
+     * on Gamepad 1 A. While {@code false} the servo is never touched (no
+     * hardware lookup, no position command), so TeleOp runs fine without it
+     * configured.
+     */
+    private static final boolean FLOWER_SERVO_ENABLED = false;
+
     private Follower follower;
     private TurretSubsystem turret;
     private IntakeSubsystem intake;
@@ -56,6 +70,7 @@ public class MainTeleOp extends OpMode {
     private double fieldCentricOffsetRad;
     private boolean drivingToHome;
     private boolean servoAtPositionB;
+    private boolean turretAtSideAngle;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
     private long lastLoopNanos;
@@ -79,9 +94,14 @@ public class MainTeleOp extends OpMode {
         outtake = new OuttakeSubsystem(hardwareMap);
 
         // Two-position servo, toggled with Gamepad 1 A. Start at POSITION_A.
-        servo = hardwareMap.get(Servo.class, RobotConstants.Servo.NAME);
+        // Skipped entirely while FLOWER_SERVO_ENABLED is false.
         servoAtPositionB = false;
-        servo.setPosition(RobotConstants.Servo.POSITION_A);
+        if (FLOWER_SERVO_ENABLED) {
+            servo = hardwareMap.get(Servo.class, RobotConstants.Servo.NAME);
+            servo.setPosition(RobotConstants.Servo.POSITION_A);
+        } else {
+            servo = null;
+        }
 
         // Turret aims continuously at the hive using the follower's pose, and
         // picks the top or bottom hive side from the robot's Y position. Its
@@ -102,12 +122,14 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  X = field-centric  |  LB hold = slow");
-        telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home  |  A = servo A/B");
+        telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home"
+                + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
-        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer  |  LT hold = open gate");
+        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
+        telemetry.addLine("G2: LT hold = open gate");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (TURRET_ENABLED) {
-            telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret HOME");
+            telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret 90 deg / back");
             telemetry.addLine("Turret must be pointing straight forward now (no encoder)");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
@@ -155,9 +177,7 @@ public class MainTeleOp extends OpMode {
             );
         }
 
-        if (fieldCentricToggle.update(gamepad1.x)) {
-            fieldCentric = !fieldCentric;
-        }
+
 
         // Check for driver cancel BEFORE scaling by activeSpeed so the stick
         // cancel threshold stays the same in slow mode and at low speed settings.
@@ -200,7 +220,7 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Two-position servo (Gamepad 1 A toggles) ----
-        if (servoToggle.update(gamepad1.a)) {
+        if (servo != null && servoToggle.update(gamepad1.a)) {
             servoAtPositionB = !servoAtPositionB;
             servo.setPosition(servoAtPositionB
                     ? RobotConstants.Servo.POSITION_B
@@ -359,10 +379,10 @@ public class MainTeleOp extends OpMode {
     /**
      * Gamepad 2 turret controls. Dpad Up aims at the hive, with the top or
      * bottom side picked automatically from the robot's Y position. Dpad Down
-     * aims at the fixed CENTER target instead. LB toggles a manual HOME
-     * override that parks the turret at its starting angle regardless of robot
-     * pose. Selecting a target while HOME is active also returns the turret to
-     * TRACKING.
+     * aims at the fixed CENTER target instead. LB stops tracking and turns the
+     * turret 90 degrees ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from
+     * straight forward; pressing LB again turns it back 90 degrees to straight
+     * forward. Dpad Up or Dpad Down returns the turret to TRACKING.
      */
     private void updateTurretFromGamepad() {
         if (turretHiveToggle.update(gamepad2.dpad_up)) {
@@ -377,10 +397,14 @@ public class MainTeleOp extends OpMode {
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
         if (turretHomeToggle.update(gamepad2.left_bumper)) {
-            boolean goHome = turret.getMode() != TurretSubsystem.TurretMode.HOME;
-            turret.setMode(goHome
-                    ? TurretSubsystem.TurretMode.HOME
-                    : TurretSubsystem.TurretMode.TRACKING);
+            // First press (or first press after tracking): turn to the side
+            // angle. Next press: turn back to straight forward. Repeats.
+            boolean holdingFixedAngle = turret.getMode() == TurretSubsystem.TurretMode.HOME;
+            turretAtSideAngle = !(holdingFixedAngle && turretAtSideAngle);
+            turret.setHomeAngle(turretAtSideAngle
+                    ? RobotConstants.Turret.SIDE_ANGLE_RADIANS
+                    : RobotConstants.Turret.HOME_ANGLE_RADIANS);
+            turret.setMode(TurretSubsystem.TurretMode.HOME);
         }
     }
 
@@ -407,7 +431,9 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
         telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
-        telemetry.addData("Servo", servoAtPositionB ? "POSITION_B" : "POSITION_A");
+        telemetry.addData("Servo", servo == null
+                ? "DISABLED"
+                : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
         if (turret != null) {
             telemetry.addData("Turret mode", turret.getMode());
             telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());

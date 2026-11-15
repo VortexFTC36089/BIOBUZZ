@@ -111,27 +111,27 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.85;
+        public static final double INTAKE_POWER = 1;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -0.85;
+        public static final double OUTTAKE_POWER = -0.80;
 
         /**
          * Power used on the transfer motor while pulling game elements in
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 0.85;
+        public static final double TRANSFER_INTAKE_POWER = 1;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -0.85 ;
+        public static final double TRANSFER_REVERSE_POWER = -.8;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -163,7 +163,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2000;
+        public static final double TARGET_RPM = 2260;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -180,12 +180,12 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 155.0;
+        public static final double LEFT_KP = 185.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 155.0;
+        public static final double RIGHT_KP = 185.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 1.0;
         public static final double RIGHT_KF = 10.0;
@@ -319,6 +319,13 @@ public final class RobotConstants {
         public static final double HOME_ANGLE_RADIANS = 0.0;
 
         /**
+         * Chassis-relative angle (radians) the turret turns to on the first press of
+         * Gamepad 2 LB; the next press returns it to {@link #HOME_ANGLE_RADIANS}.
+         * Positive is counterclockwise (left); use -90 to turn right instead.
+         */
+        public static final double SIDE_ANGLE_RADIANS = Math.toRadians(90.0);
+
+        /**
          * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
          * means the turret spins without limit and always takes the shortest path to the
          * target. Set back to {@code true} if any cable can wrap around the turret.
@@ -387,6 +394,23 @@ public final class RobotConstants {
          */
         // TODO(team): measure this on the robot
         public static final double POSITION_B = 1;
+    }
+
+    /**
+     * Timings for the autonomous "shoot balls" command in {@code MainAuto}.
+     */
+    public static final class Auto {
+        /** Longest time to wait for the flywheels to reach speed before shooting anyway. */
+        // TODO(team): tune on the robot
+        public static final double SPIN_UP_TIMEOUT_MS = 3000.0;
+
+        /** Time given to the gate servo to finish opening before balls are fed. */
+        // TODO(team): tune on the robot
+        public static final double GATE_OPEN_WAIT_MS = 300.0;
+
+        /** How long the intake and transfer run to feed every ball into the flywheels. */
+        // TODO(team): tune on the robot (long enough for all balls to leave)
+        public static final double FEED_TIME_MS = 1500.0;
     }
 
     /**

@@ -11,6 +11,7 @@ import com.pedropathing.ivy.Command;
 import com.pedropathing.ivy.Scheduler;
 import static com.pedropathing.ivy.Scheduler.schedule;
 import static com.pedropathing.ivy.commands.Commands.*;
+import static com.pedropathing.ivy.groups.Groups.race;
 import static com.pedropathing.ivy.groups.Groups.sequential;
 import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -22,39 +23,92 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 public class MainAuto extends LinearOpMode {
 
     private Follower follower;
+    private IntakeSubsystem intake;
+    private OuttakeSubsystem outtake;
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
     private final Pose start = poseFactory.of(56, 8, 90);
-    private final Pose point1 = poseFactory.of(22.8271, 72.1197, 90);
-    private final Pose point1Control1 = poseFactory.of(14.6934, 32.8084, 0);
-    private final Pose point2 = poseFactory.of(23.0003, 40.4856, 90.3137);
+    private final Pose point1 = poseFactory.of(12.8, 95, 90);
+    private final Pose point1Control1 = poseFactory.of(13.6319, 28.4114, 0);
+    private final Pose point2 = poseFactory.of(14, 28, 90);
+    private final Pose point3 = poseFactory.of(14, 96.254, 90);
 
     // Autonomous routine
     public Command autoRoutine() {
         return sequential(
-                follow(follower, path1()),
-                follow(follower, path2())
+                shootBalls(),
+                follow(follower, path1())
+        );
+    }
+
+    /**
+     * Shoots the balls currently held by the robot:
+     * <ol>
+     *   <li>spins the flywheels up and waits until both are at speed (or
+     *       {@link RobotConstants.Auto#SPIN_UP_TIMEOUT_MS} passes, so a slow
+     *       flywheel cannot stall the whole autonomous),</li>
+     *   <li>opens the gate and waits for the servo to move,</li>
+     *   <li>runs the intake and transfer inward for
+     *       {@link RobotConstants.Auto#FEED_TIME_MS} to feed the balls,</li>
+     *   <li>stops the intake, transfer and flywheels and closes the gate.</li>
+     * </ol>
+     *
+     * <p>Use it inside {@link #autoRoutine()}, e.g. after a {@code follow(...)}.
+     * The robot does not drive while this runs.
+     */
+    public Command shootBalls() {
+        return sequential(
+                instant(() -> outtake.outtake()),
+                race(
+                        waitUntil(() -> outtake.atSpeed()),
+                        waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
+                ),
+                instant(() -> outtake.setGateOpen(true)),
+                waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
+                instant(() -> {
+                    intake.intake();
+                    intake.transfer();
+                }),
+                waitMs(RobotConstants.Auto.FEED_TIME_MS),
+                instant(() -> {
+                    intake.stop();
+                    outtake.stop();
+                })
         );
     }
 
     @Override
     public void runOpMode() {
         Scheduler.reset();
+        intake = new IntakeSubsystem(hardwareMap);
+        outtake = new OuttakeSubsystem(hardwareMap);
         follower = Constants.create(hardwareMap);
         follower.setPose(start);
         follower.update();
+        // Hand-off to TeleOp starts at the auto start pose, in case auto is
+        // stopped before it ever moves.
+        PoseStorage.lastAutoPose = follower.pose();
 
         waitForStart();
         schedule(autoRoutine());
 
         while (opModeIsActive()) {
             follower.update();
+            // Save the latest pose every loop so TeleOp starts from wherever
+            // autonomous ended, even if it is stopped early or times out.
+            PoseStorage.lastAutoPose = follower.pose();
             Scheduler.execute();
+            // Apply whatever the commands requested this loop to the hardware.
+            intake.update();
+            outtake.update();
 
             telemetry.addData("x", follower.pose().x());
             telemetry.addData("y", follower.pose().y());
             telemetry.addData("heading", follower.pose().heading());
+            telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (atSpeed=%b)",
+                    outtake.getLeftRpm(), outtake.getRightRpm(), outtake.atSpeed());
+            telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
 
             if (follower.currentPath() != null) {
                 telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());
@@ -71,5 +125,9 @@ public class MainAuto extends LinearOpMode {
 
     public Path path2() {
         return Paths.line(point1, point2).reverseTangent();
+    }
+
+    public Path path3() {
+        return Paths.line(point2, point3).reverseTangent();
     }
 }

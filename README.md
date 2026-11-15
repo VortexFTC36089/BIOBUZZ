@@ -117,7 +117,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Left bumper (hold) | Slow mode (30%) |
 | X | Toggle field-centric drive |
 | Back | Set current heading as field-centric forward (preserves localizer pose for turret) |
-| A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` |
+| A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` (currently disabled: `FLOWER_SERVO_ENABLED = false` in `MainTeleOp`) |
 | Y | Follow a line to the score pose (cancels if you move a stick) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
@@ -132,7 +132,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Left trigger (hold) | Open outtake gate (closes on release) |
 | Dpad Up | Turret: aim at the hive, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
 | Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
-| Left bumper | Turret: toggle HOME override (return to starting angle) |
+| Left bumper | Turret: stop tracking and turn 90° from forward; press again to turn back to forward |
 
 The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos with no encoder. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves. Its angle is estimated from commanded power and time, so it must point straight forward when the OpMode is initialized. The speed used for that estimate comes from `Turret.SERVO_FREE_SPEED_RPM` (from the servo spec sheet) divided by `Turret.GEAR_RATIO`. Commands at or below `Turret.SERVO_DEADBAND_POWER` are counted as no movement, so that value must be measured on the robot: the turret only tracks slow target motion (driving in X/Y) if it is right.
 
