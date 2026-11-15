@@ -4,6 +4,7 @@ import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.ivy.Command;
+import com.pedropathing.ivy.Scheduler;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -13,6 +14,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import static com.pedropathing.api.Paths.line;
+import static com.pedropathing.ivy.Scheduler.schedule;
 import static com.pedropathing.ivy.commands.Commands.instant;
 import static com.pedropathing.ivy.commands.Commands.waitMs;
 import static com.pedropathing.ivy.commands.Commands.waitUntil;
@@ -71,6 +73,8 @@ public class MainTeleOp extends OpMode {
     private boolean drivingToHome;
     private boolean servoAtPositionB;
     private boolean turretAtSideAngle;
+    private boolean wasShootTrigger;
+    private Command activeShoot;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
     private long lastLoopNanos;
@@ -82,6 +86,7 @@ public class MainTeleOp extends OpMode {
      */
     @Override
     public void init() {
+        Scheduler.reset();
         follower = Constants.create(hardwareMap);
 
         boolean poseFromAuto = PoseStorage.lastAutoPose != null;
@@ -126,7 +131,7 @@ public class MainTeleOp extends OpMode {
                 + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
-        telemetry.addLine("G2: LT hold = open gate");
+        telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (same as auto)");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (TURRET_ENABLED) {
             telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret 90 deg / back");
@@ -227,11 +232,25 @@ public class MainTeleOp extends OpMode {
                     : RobotConstants.Servo.POSITION_A);
         }
 
-        // ---- Intake ----
-        updateIntakeFromGamepad();
+        // ---- Shoot balls (Gamepad 2 RT) ----
+        // Same Ivy sequence as MainAuto. Rising edge starts it; it runs to
+        // completion. Face buttons and LT are ignored while it is active.
+        boolean shootPressed = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
+        boolean shooting = isShootActive();
+        if (shootPressed && !wasShootTrigger && !shooting) {
+            activeShoot = shootBalls();
+            schedule(activeShoot);
+            shooting = true;
+        }
+        wasShootTrigger = shootPressed;
 
-        // ---- Outtake ----
-        updateOuttakeFromGamepad();
+        // ---- Intake / outtake ----
+        // Flywheels stay on for the whole TeleOp, including during shoot.
+        outtake.outtake();
+        if (!shooting) {
+            updateIntakeFromGamepad();
+            outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
+        }
 
         // ---- Turret target / override selection ----
         if (turret != null) {
@@ -239,6 +258,7 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Hardware write ----
+        Scheduler.execute();
         intake.update();
         outtake.update();
         follower.update();
@@ -256,6 +276,8 @@ public class MainTeleOp extends OpMode {
      */
     @Override
     public void stop() {
+        Scheduler.reset();
+        activeShoot = null;
         if (intake != null) {
             intake.stop();
             intake.update();
@@ -365,15 +387,37 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * The outtake flywheels run at the fixed
-     * {@link RobotConstants.Outtake#TARGET_RPM} the whole time TeleOp is
-     * running (from Play until Stop). Holding the left trigger opens the
-     * outtake gate; releasing it closes the gate.
+     * TeleOp shoot sequence: wait for the already-running flywheels to be at
+     * speed, open the gate, feed with intake and transfer, then stop the feed
+     * and close the gate. The flywheels are left running.
      */
-    private void updateOuttakeFromGamepad() {
-        outtake.outtake();
+    private Command shootBalls() {
+        return sequential(
+                race(
+                        waitUntil(() -> outtake.atSpeed()),
+                        waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
+                ),
+                instant(() -> outtake.setGateOpen(true)),
+                waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
+                instant(() -> {
+                    intake.intake();
+                    intake.transfer();
+                }),
+                waitMs(RobotConstants.Auto.FEED_TIME_MS),
+                instant(() -> {
+                    intake.stop();
+                    outtake.setGateOpen(false);
+                })
+        );
+    }
 
-        outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
+    /**
+     * @return {@code true} if the shoot-balls Ivy command is still scheduled
+     *         or running
+     */
+    private boolean isShootActive() {
+        return activeShoot != null
+                && (Scheduler.isScheduled(activeShoot) || Scheduler.isRunning(activeShoot));
     }
 
     /**
@@ -431,6 +475,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
         telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
+        telemetry.addData("Shoot balls", isShootActive() ? "RUNNING" : "OFF");
         telemetry.addData("Servo", servo == null
                 ? "DISABLED"
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));

@@ -129,7 +129,8 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | X (hold) | Run transfer motor |
 | B (hold) | Reverse transfer motor |
 | (none, automatic) | Outtake motors run at `Outtake.TARGET_RPM` from Play until Stop |
-| Left trigger (hold) | Open outtake gate (closes on release) |
+| Left trigger (hold) | Open outtake gate (closes on release; ignored while RT shoot is running) |
+| Right trigger (press) | Run `shootBalls` (spin up → open gate → feed → stop) |
 | Dpad Up | Turret: aim at the hive, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
 | Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: stop tracking and turn 90° from forward; press again to turn back to forward |
