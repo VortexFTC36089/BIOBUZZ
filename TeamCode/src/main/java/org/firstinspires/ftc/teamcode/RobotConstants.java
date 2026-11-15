@@ -117,7 +117,7 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static final double TRANSFER_TARGET_RPM = 5500.0;
+        public static final double TRANSFER_TARGET_RPM = 5225.0;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
@@ -185,7 +185,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2480;
+        public static final double TARGET_RPM = 2450;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -202,12 +202,12 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 179.0;
+        public static final double LEFT_KP = 175.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 185.0;
+        public static final double RIGHT_KP = 175.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 1.0;
         public static final double RIGHT_KF = 10.0;
