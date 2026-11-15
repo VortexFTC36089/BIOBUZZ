@@ -12,16 +12,16 @@ import com.pedropathing.math.Pose;
  *
  * <p>Hardware this file currently assumes:
  * <ul>
- *   <li>Four mecanum drive motors: {@code left_front}, {@code right_front},
+ *    <li>Four mecanum drive motors: {@code left_front}, {@code right_front},
  *       {@code left_back}, {@code right_back}</li>
- *   <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
- *   <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
- *   <li>Two outtake {@link com.qualcomm.robotcore.hardware.DcMotor}s:
+ *    <li>One intake {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code intake}</li>
+ *    <li>One transfer {@link com.qualcomm.robotcore.hardware.DcMotor}: {@code transfer}</li>
+ *    <li>Two outtake {@link com.qualcomm.robotcore.hardware.DcMotor}s:
  *       {@code outtake_left}, {@code outtake_right}</li>
- *   <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
+ *    <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
  *       {@code turretServoLeft}, {@code turretServoRight}</li>
- *   <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
- *   <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
+ *    <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
+ *    <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
  */
 public final class RobotConstants {
@@ -108,6 +108,28 @@ public final class RobotConstants {
         public static final String TRANSFER_MOTOR = "transfer";
 
         /**
+         * Encoder ticks per output revolution for the transfer motor.
+         */
+        // TODO(team): set for the real transfer motor / gearbox
+        public static final double TRANSFER_TICKS_PER_REV = 28.0;
+
+        /**
+         * Target velocity in RPM for the transfer motor when using encoder velocity control.
+         */
+        // TODO(team): tune transfer target RPM on the robot
+        public static final double TRANSFER_TARGET_RPM = 5500.0;
+
+        /**
+         * Velocity PIDF coefficients applied to the transfer motor in
+         * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
+         */
+        // TODO(team): tune transfer velocity PIDF gains on the robot
+        public static final double TRANSFER_KP = 75.0;
+        public static final double TRANSFER_KI = 0.0;
+        public static final double TRANSFER_KD = 0.5;
+        public static final double TRANSFER_KF = 10.0;
+
+        /**
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
@@ -163,7 +185,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2260;
+        public static final double TARGET_RPM = 2500;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -180,7 +202,7 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 185.0;
+        public static final double LEFT_KP = 180.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
@@ -200,6 +222,7 @@ public final class RobotConstants {
         public static final double GATE_CLOSED_POSITION = 0;
         public static final double GATE_OPEN_POSITION = .212;
     }
+
 
     /**
      * goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by TWO continuous-rotation

@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * <p>Hardware:
  * <ul>
- *   <li>One intake {@link DcMotorEx} named {@link RobotConstants.Intake#MOTOR}</li>
- *   <li>One transfer {@link DcMotorEx} named {@link RobotConstants.Intake#TRANSFER_MOTOR}</li>
+ *    <li>One intake {@link DcMotorEx} named {@link RobotConstants.Intake#MOTOR}</li>
+ *    <li>One transfer {@link DcMotorEx} named {@link RobotConstants.Intake#TRANSFER_MOTOR}</li>
  * </ul>
  */
 public class IntakeSubsystem {
@@ -64,9 +64,17 @@ public class IntakeSubsystem {
         motor.setDirection(DcMotorSimple.Direction.FORWARD);
         transferMotor.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        // Run without encoder: we command percent power, not a target position.
+        // Intake runs without encoder (percent power)
         motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        transferMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        // Transfer runs using encoder with PIDF velocity control
+        transferMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        transferMotor.setVelocityPIDFCoefficients(
+                RobotConstants.Intake.TRANSFER_KP,
+                RobotConstants.Intake.TRANSFER_KI,
+                RobotConstants.Intake.TRANSFER_KD,
+                RobotConstants.Intake.TRANSFER_KF
+        );
 
         state = IntakeState.OFF;
         transferState = TransferState.OFF;
@@ -119,8 +127,7 @@ public class IntakeSubsystem {
     // ---- Transfer Motor Controls ----
 
     /**
-     * Runs the transfer motor forward at
-     * {@link RobotConstants.Intake#TRANSFER_INTAKE_POWER}.
+     * Runs the transfer motor forward using target RPM converted to ticks per second.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -129,8 +136,7 @@ public class IntakeSubsystem {
     }
 
     /**
-     * Runs the transfer motor in reverse at
-     * {@link RobotConstants.Intake#TRANSFER_REVERSE_POWER}.
+     * Runs the transfer motor in reverse using target RPM.
      *
      * <p>Takes effect on the next {@link #update()}.</p>
      */
@@ -159,11 +165,11 @@ public class IntakeSubsystem {
     }
 
     /**
-     * Writes motor powers for the current states to the intake and transfer
+     * Writes motor powers and velocities for the current states to the intake and transfer
      * motors independently.
      *
-     * <p>Call once per OpMode loop. Powers come from {@link RobotConstants}
-     * so TeleOp never hardcodes a number.</p>
+     * <p>Call once per OpMode loop. Powers and RPM come from {@link RobotConstants}
+     * so TeleOp never hardcodes a number.
      */
     public void update() {
         switch (state) {
@@ -181,10 +187,14 @@ public class IntakeSubsystem {
 
         switch (transferState) {
             case TRANSFERRING:
-                transferMotor.setPower(RobotConstants.Intake.TRANSFER_INTAKE_POWER);
+                double transferTicksPerSec = (RobotConstants.Intake.TRANSFER_TARGET_RPM
+                        * RobotConstants.Intake.TRANSFER_TICKS_PER_REV) / 60.0;
+                transferMotor.setVelocity(transferTicksPerSec);
                 break;
             case REVERSING:
-                transferMotor.setPower(RobotConstants.Intake.TRANSFER_REVERSE_POWER);
+                double reverseTicksPerSec = (RobotConstants.Intake.TRANSFER_TARGET_RPM
+                        * RobotConstants.Intake.TRANSFER_TICKS_PER_REV) / 60.0;
+                transferMotor.setVelocity(-reverseTicksPerSec);
                 break;
             case OFF:
             default:
