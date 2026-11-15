@@ -185,7 +185,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2500;
+        public static final double TARGET_RPM = 2480;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -202,7 +202,7 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 180.0;
+        public static final double LEFT_KP = 179.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
