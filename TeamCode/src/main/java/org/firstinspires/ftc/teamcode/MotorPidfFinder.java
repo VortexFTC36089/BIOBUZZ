@@ -38,7 +38,8 @@ public class MotorPidfFinder extends OpMode {
     /** Motors that can be tuned. Only the selected one runs. */
     private static final String[] MOTOR_NAMES = {
             RobotConstants.Outtake.LEFT_MOTOR,
-            RobotConstants.Outtake.RIGHT_MOTOR
+            RobotConstants.Outtake.RIGHT_MOTOR,
+            RobotConstants.Intake.TRANSFER_MOTOR
     };
 
     /** Whether each motor in {@link #MOTOR_NAMES} is reversed (same order). */
@@ -66,7 +67,14 @@ public class MotorPidfFinder extends OpMode {
                     RobotConstants.Outtake.RIGHT_KI,
                     RobotConstants.Outtake.RIGHT_KD,
                     RobotConstants.Outtake.RIGHT_KF
+            },
+            {
+                    RobotConstants.Outtake.RIGHT_KP,
+                    RobotConstants.Outtake.RIGHT_KI,
+                    RobotConstants.Outtake.RIGHT_KD,
+                    RobotConstants.Outtake.RIGHT_KF
             }
+
     };
 
     // ---- End of settings ----

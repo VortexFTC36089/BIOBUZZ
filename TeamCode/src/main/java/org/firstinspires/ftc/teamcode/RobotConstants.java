@@ -117,14 +117,14 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static final double TRANSFER_TARGET_RPM = 5225.0;
+        public static final double TRANSFER_TARGET_RPM = 5000.0;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
          * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
          */
         // TODO(team): tune transfer velocity PIDF gains on the robot
-        public static final double TRANSFER_KP = 75.0;
+        public static final double TRANSFER_KP = 50.0;
         public static final double TRANSFER_KI = 0.0;
         public static final double TRANSFER_KD = 0.5;
         public static final double TRANSFER_KF = 10.0;
@@ -202,12 +202,12 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 175.0;
+        public static final double LEFT_KP = 173.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 1.0;
         public static final double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 175.0;
+        public static final double RIGHT_KP = 173.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 1.0;
         public static final double RIGHT_KF = 10.0;
@@ -433,7 +433,7 @@ public final class RobotConstants {
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 1500.0;
+        public static final double FEED_TIME_MS = 0500.0;
     }
 
     /**
