@@ -29,6 +29,7 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Outtake gate | Servo | `outtake_gate` |
 | Turret left | CR Servo | `turretServoLeft` |
 | Turret right | CR Servo | `turretServoRight` |
+| Turret encoder | Motor encoder | `turretEncoder` |
 | Flower servo | Servo | `flower` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
@@ -135,7 +136,7 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: stop tracking and turn 90° from forward; press again to turn back to forward |
 
-The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos with no encoder. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves. Its angle is estimated from commanded power and time, so it must point straight forward when the OpMode is initialized. The speed used for that estimate comes from `Turret.SERVO_FREE_SPEED_RPM` (from the servo spec sheet) divided by `Turret.GEAR_RATIO`. Commands at or below `Turret.SERVO_DEADBAND_POWER` are counted as no movement, so that value must be measured on the robot: the turret only tracks slow target motion (driving in X/Y) if it is right.
+The turret is the goBILDA Gear-Driven Turret (2.75:1, 176T ring, 64T drive gears) driven by two continuous-rotation servos and measured by a REV Through Bore Encoder V2 (`turretEncoder`, 8192 CPR). Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop. It must point straight forward when the OpMode starts, because that pose is the encoder zero. Rotation is continuous: the turret always takes the shortest path and has no cable limits. If counterclockwise rotation reads negative, set `Turret.ENCODER_REVERSED` to true.
 
 Stick signs: `forward = -left_y`, `strafe = -left_x`, `turn = -right_x`.
 

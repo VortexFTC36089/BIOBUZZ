@@ -2,6 +2,8 @@ package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -18,10 +20,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  * <ul>
  *   <li>Two {@link CRServo}s ({@code SERVO_LEFT}, {@code SERVO_RIGHT}) that BOTH push the
  *       turret in the same direction (set the reversed flags in RobotConstants).</li>
- *   <li>NO encoder. The turret angle is an ESTIMATE: commanded power x time x a calibrated
- *       speed, with commands at or below the servo deadband counted as no movement. It can
- *       drift, so the turret must start pointing straight forward, and
- *       {@link #resetAngle()} re-zeroes the estimate whenever it is physically at home.</li>
+ *   <li>A REV Through Bore Encoder V2 on {@code ENCODER_PORT}. Angle is read from that
+ *       encoder, so the turret must start pointing straight forward and
+ *       {@link #resetAngle()} re-zeroes the reading whenever it is physically at home.
+ *       Rotation is continuous: the shortest path across +/- PI is always used.</li>
  * </ul>
  */
 public class TurretSubsystem {
@@ -102,7 +104,8 @@ public class TurretSubsystem {
 
     private final CRServo leftServo;
     private final CRServo rightServo;
-    private final ElapsedTime estimateTimer = new ElapsedTime();
+    private final DcMotorEx turretEncoder;
+    private int zeroOffsetTicks = 0;
     private final PIDFController pidfController;
     private final ElapsedTime targetVelTimer = new ElapsedTime();
 
@@ -125,16 +128,9 @@ public class TurretSubsystem {
     /** Chassis-relative angle (radians) held while in {@link TurretMode#HOME}. */
     private double homeAngleRad = RobotConstants.Turret.HOME_ANGLE_RADIANS;
 
-    // Geometry & servo speed model
+    // Geometry
     private double xOffsetInches = RobotConstants.Turret.OFFSET_X_INCHES;
     private double yOffsetInches = RobotConstants.Turret.OFFSET_Y_INCHES;
-    private double radPerSecAtFullPower = RobotConstants.Turret.RAD_PER_SEC_AT_FULL_POWER;
-    private double estimatedAngleRad = 0.0;
-
-    // Rotation soft limits (prevent wire binding)
-    private boolean useSoftLimits = RobotConstants.Turret.USE_SOFT_LIMITS;
-    private double minAngleRadians = RobotConstants.Turret.MIN_ANGLE_RADIANS;
-    private double maxAngleRadians = RobotConstants.Turret.MAX_ANGLE_RADIANS;
 
     // Field target (hive) in Pedro Pathing inches
     private double targetXInches = RobotConstants.Turret.DEFAULT_TARGET_X_INCHES;
@@ -159,8 +155,8 @@ public class TurretSubsystem {
     private double lastCommandedPower = 0.0;
 
     /**
-     * Initializes both continuous servos from the hardware map.
-     * The angle estimate starts at 0 here, so the turret must be pointing straight
+     * Initializes both continuous servos and the through-bore encoder.
+     * The angle reads 0 here, so the turret must be pointing straight
      * forward (home) when the OpMode is initialized.
      */
     public TurretSubsystem(HardwareMap hardwareMap) {
@@ -173,6 +169,9 @@ public class TurretSubsystem {
         rightServo.setDirection(RobotConstants.Turret.SERVO_RIGHT_REVERSED
                 ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
 
+        turretEncoder = hardwareMap.get(DcMotorEx.class, RobotConstants.Turret.ENCODER_PORT);
+        turretEncoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        turretEncoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         resetAngle();
 
         pidfController = new PIDFController(
@@ -185,38 +184,13 @@ public class TurretSubsystem {
         setServoPower(0.0);
     }
 
-    /** Declares the turret's current position to be 0 rad (pointing forward). Call only when it really is. */
+    /**
+     * Declares the turret's current position to be 0 rad (pointing forward).
+     * Call only when it really is. Stores an offset instead of resetting the
+     * hub encoder mode, so this is safe to call mid-match.
+     */
     public void resetAngle() {
-        estimatedAngleRad = 0.0;
-        estimateTimer.reset();
-    }
-
-    /**
-     * Integrates the turret speed produced by the last commanded power over the elapsed
-     * time to estimate the turret angle.
-     */
-    private void updateEstimate() {
-        double dt = Range.clip(estimateTimer.seconds(), 0.0, 0.1);
-        estimateTimer.reset();
-        estimatedAngleRad += effectiveSpeedFraction(lastCommandedPower) * radPerSecAtFullPower * dt;
-    }
-
-    /**
-     * Fraction of full turret speed the servos actually produce for a commanded power.
-     * At or below {@link RobotConstants.Turret#SERVO_DEADBAND_POWER} the turret is stalled,
-     * so the speed is 0 and the estimate does not advance. Above it, speed rises linearly
-     * from 0 at the deadband to full speed at power 1.0.
-     *
-     * @param power commanded servo power in [-1, 1]
-     * @return signed speed fraction in [-1, 1]
-     */
-    private static double effectiveSpeedFraction(double power) {
-        double deadband = RobotConstants.Turret.SERVO_DEADBAND_POWER;
-        double magnitude = Math.abs(power);
-        if (magnitude <= deadband) {
-            return 0.0;
-        }
-        return Math.signum(power) * (magnitude - deadband) / (1.0 - deadband);
+        zeroOffsetTicks = turretEncoder.getCurrentPosition();
     }
 
     /**
@@ -226,8 +200,6 @@ public class TurretSubsystem {
      * @param currentPose current robot {@link Pose} from Pedro Pathing
      */
     public void update(Pose currentPose) {
-        updateEstimate();
-
         if (!enabled || mode == TurretMode.DISABLED) {
             stop();
             return;
@@ -264,9 +236,6 @@ public class TurretSubsystem {
     }
 
     private void driveToRelativeAngle(double relativeTargetAngle) {
-        if (useSoftLimits) {
-            relativeTargetAngle = Range.clip(relativeTargetAngle, minAngleRadians, maxAngleRadians);
-        }
         relativeTargetAngleRad = relativeTargetAngle;
 
         // Target angular velocity (rad/s) for kV feedforward. It is capped at the turret's
@@ -274,10 +243,11 @@ public class TurretSubsystem {
         // cannot spike the feedforward.
         double dt = targetVelTimer.seconds();
         targetVelTimer.reset();
+        double maxVelocity = RobotConstants.Turret.MAX_TARGET_VELOCITY_RAD_SEC;
         if (!firstTargetSample && dt > 1e-4 && dt <= 0.5) {
             double rawVelocity = Range.clip(
                     AngleUnit.normalizeRadians(relativeTargetAngleRad - previousTargetAngleRad) / dt,
-                    -radPerSecAtFullPower, radPerSecAtFullPower);
+                    -maxVelocity, maxVelocity);
             double alpha = dt / (RobotConstants.Turret.TARGET_VELOCITY_FILTER_SECONDS + dt);
             targetAngularVelocityRadSec += alpha * (rawVelocity - targetAngularVelocityRadSec);
         } else {
@@ -286,19 +256,9 @@ public class TurretSubsystem {
         }
         previousTargetAngleRad = relativeTargetAngleRad;
 
-        // Current angle = dead-reckoned estimate (no encoder)
-        currentAngleRad = estimatedAngleRad;
+        currentAngleRad = getCurrentAngleRadians();
+        // Shortest path across +/- PI, including after multiple revolutions.
         angleErrorRad = AngleUnit.normalizeRadians(relativeTargetAngleRad - currentAngleRad);
-
-        // Don't let the shortest path cross the mechanical limits (cable wrap)
-        if (useSoftLimits) {
-            double unwrappedTarget = currentAngleRad + angleErrorRad;
-            if (unwrappedTarget > maxAngleRadians) {
-                angleErrorRad -= 2.0 * Math.PI;
-            } else if (unwrappedTarget < minAngleRadians) {
-                angleErrorRad += 2.0 * Math.PI;
-            }
-        }
 
         // Aimed: stop the servos. This depends only on the error, not on how fast the
         // target is moving, and it keeps the integral so a slowly moving target does not
@@ -316,14 +276,6 @@ public class TurretSubsystem {
         double minPower = RobotConstants.Turret.MIN_COMMAND_POWER;
         if (Math.abs(rawPower) < minPower) {
             rawPower = Math.signum(angleErrorRad) * minPower;
-        }
-
-        // Hard cutoff if already at/beyond a soft limit and still pushing outward
-        if (useSoftLimits) {
-            if ((currentAngleRad >= maxAngleRadians && rawPower > 0.0)
-                    || (currentAngleRad <= minAngleRadians && rawPower < 0.0)) {
-                rawPower = 0.0;
-            }
         }
 
         double maxPower = RobotConstants.Turret.MAX_POWER;
@@ -436,12 +388,6 @@ public class TurretSubsystem {
         this.pidfController.setPIDF(kP, kI, kD, kF);
     }
 
-    public void setSoftLimitsDegrees(boolean useSoftLimits, double minDegrees, double maxDegrees) {
-        this.useSoftLimits = useSoftLimits;
-        this.minAngleRadians = Math.toRadians(minDegrees);
-        this.maxAngleRadians = Math.toRadians(maxDegrees);
-    }
-
     public void setMountingOffset(double xOffsetInches, double yOffsetInches) {
         this.xOffsetInches = xOffsetInches;
         this.yOffsetInches = yOffsetInches;
@@ -462,7 +408,13 @@ public class TurretSubsystem {
     }
 
     public double getCurrentAngleRadians() {
-        return estimatedAngleRad;
+        int ticks = turretEncoder.getCurrentPosition() - zeroOffsetTicks;
+        if (RobotConstants.Turret.ENCODER_REVERSED) {
+            ticks = -ticks;
+        }
+        return (ticks / RobotConstants.Turret.ENCODER_TICKS_PER_REV)
+                * (2.0 * Math.PI)
+                * RobotConstants.Turret.ENCODER_TO_TURRET_RATIO;
     }
 
     public double getCurrentAngleDegrees() {
@@ -505,7 +457,7 @@ public class TurretSubsystem {
      * <ul>
      *   <li>{@code targetGlobalDeg}: field angle from the turret to the target</li>
      *   <li>{@code relativeTargetDeg}: that angle relative to the chassis (where the turret should point)</li>
-     *   <li>{@code estimatedAngleDeg}: where the turret thinks it points (dead-reckoned, no encoder)</li>
+     *   <li>{@code currentAngleDeg}: where the through-bore encoder says the turret points</li>
      *   <li>{@code angleErrorDeg}: relative target minus estimate, shortest path</li>
      *   <li>{@code lastCommandedPower}: power sent to both servos this loop</li>
      * </ul>
@@ -513,7 +465,7 @@ public class TurretSubsystem {
     public void addTelemetry(Telemetry telemetry) {
         telemetry.addData("Turret targetGlobalDeg", "%.1f", getTargetGlobalDegrees());
         telemetry.addData("Turret relativeTargetDeg", "%.1f", getTargetAngleDegrees());
-        telemetry.addData("Turret estimatedAngleDeg", "%.1f", getCurrentAngleDegrees());
+        telemetry.addData("Turret currentAngleDeg", "%.1f", getCurrentAngleDegrees());
         telemetry.addData("Turret angleErrorDeg", "%.2f (onTarget=%b)", getAngleErrorDegrees(), isOnTarget());
         telemetry.addData("Turret lastCommandedPower", "%.2f", lastCommandedPower);
     }

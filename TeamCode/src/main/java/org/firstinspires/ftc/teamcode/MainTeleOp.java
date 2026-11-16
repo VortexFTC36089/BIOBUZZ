@@ -110,7 +110,7 @@ public class MainTeleOp extends OpMode {
 
         // Turret aims continuously at the hive using the follower's pose, and
         // picks the top or bottom hive side from the robot's Y position. Its
-        // angle is only an estimate (no encoder), so the turret must be
+        // The through-bore encoder is zeroed here, so the turret must be
         // pointing straight forward right now. Skipped entirely while
         // TURRET_ENABLED is false.
         if (TURRET_ENABLED) {
@@ -135,7 +135,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (TURRET_ENABLED) {
             telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret 90 deg / back");
-            telemetry.addLine("Turret must be pointing straight forward now (no encoder)");
+            telemetry.addLine("Turret must be pointing straight forward now");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
         }

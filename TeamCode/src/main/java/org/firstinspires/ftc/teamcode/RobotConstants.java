@@ -19,7 +19,8 @@ import com.pedropathing.math.Pose;
  *    <li>Two outtake {@link com.qualcomm.robotcore.hardware.DcMotor}s:
  *       {@code outtake_left}, {@code outtake_right}</li>
  *    <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
- *       {@code turretServoLeft}, {@code turretServoRight}</li>
+ *       {@code turretServoLeft}, {@code turretServoRight}, plus a REV Through Bore
+ *       encoder named {@code turretEncoder}</li>
  *    <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
  *    <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
@@ -225,15 +226,30 @@ public final class RobotConstants {
 
 
     /**
-     * goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by TWO continuous-rotation
-     * servos with NO encoder. Both servos sit on the same side of the turret and their
-     * pinions mesh with the same turret gear. The turret angle is estimated from commanded
-     * power and time, so it can drift.
+     * goBILDA Gear-Driven Turret (2.75:1, 176T ring gear, 64T drive gears) driven by
+     * two continuous-rotation servos and measured by a REV Through Bore Encoder V2.
+     * The turret rotates continuously; there are no cable limits.
      */
     public static final class Turret {
         // Hardware map names (must match the Robot Controller config exactly).
         public static final String SERVO_LEFT = "turretServoLeft";
         public static final String SERVO_RIGHT = "turretServoRight";
+
+        /** REV Through Bore Encoder V2, configured as a motor encoder port. */
+        public static final String ENCODER_PORT = "turretEncoder";
+
+        /** Quadrature counts per revolution of the REV Through Bore Encoder V2. */
+        public static final double ENCODER_TICKS_PER_REV = 8192.0;
+
+        /**
+         * Encoder shaft turns per turret turn. 64T drive gear on a 176T ring gear
+         * is {@code 64/176} (1/2.75). Change the numerator if the encoder pinion
+         * tooth count is not 64.
+         */
+        public static final double ENCODER_TO_TURRET_RATIO = 64.0 / 176.0;
+
+        /** Set true if counterclockwise turret rotation produces negative ticks. */
+        public static final boolean ENCODER_REVERSED = false;
 
         /**
          * Flip so BOTH servos push the turret the same direction, and so positive power
@@ -254,46 +270,17 @@ public final class RobotConstants {
         public static final double GEAR_RATIO = 2.75;
 
         /**
-         * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
-         * Spec sheets usually give seconds per 60 degrees: RPM = 10 / (seconds per 60 degrees).
-         * Use the figure for the voltage the servos actually run at.
+         * Fastest target motion (rad/s) the velocity feedforward is allowed to chase.
+         * 8.76 rad/s is 83.63 RPM at the turret for two goBILDA Super Speed servos.
+         * Use 4.23 if the turret is driven by Axon MINI servos instead.
          */
-        // 230 servo RPM / 2.75 = 83.63 RPM at the turret (goBILDA Super Speed, near no load).
-        // Do not lower this back to a placeholder: too low makes the turret overshoot.
-        public static final double SERVO_FREE_SPEED_RPM = 230.0;
+        public static final double MAX_TARGET_VELOCITY_RAD_SEC = 8.76;
 
         /**
-         * Turret speed (radians/second) at power 1.0, assuming speed is proportional to power.
-         * Calculated from the servo speed and the gear ratio. The whole aiming accuracy
-         * depends on this number. A loaded turret turns slower than the no-load spec, so
-         * if the turret consistently stops short of the target, lower SERVO_FREE_SPEED_RPM.
+         * Smallest power sent to the servos while the turret is outside
+         * {@link #ANGLE_TOLERANCE_RADIANS}, so a small error still overcomes stiction.
          */
-        public static final double RAD_PER_SEC_AT_FULL_POWER =
-                SERVO_FREE_SPEED_RPM * 2.0 * Math.PI / 60.0 / GEAR_RATIO;
-
-        /**
-         * Servo power at or below which the turret does NOT move (servo dead zone plus
-         * turret friction). The angle estimate treats any command this small as zero
-         * speed, and scales speed linearly from 0 at this power up to full speed at 1.0.
-         *
-         * <p>To measure: command the turret servos at a fixed low power and raise it in
-         * small steps until the turret just starts to turn in both directions; use the
-         * larger of the two values. Too low and the estimate counts movement that never
-         * happened (turret stops tracking slow target motion). Too high and small
-         * corrections overshoot.
-         */
-        // TODO(team): measure on the robot (0.08 is only a placeholder)
-        public static final double SERVO_DEADBAND_POWER = 0.08;
-
-        /**
-         * Smallest power ever sent to the servos while the turret is outside
-         * {@link #ANGLE_TOLERANCE_RADIANS}. Must stay above {@link #SERVO_DEADBAND_POWER}
-         * so every correction actually moves the turret. The margin above the deadband is
-         * deliberate: commands that sit right at the deadband make the angle estimate very
-         * sensitive to any error in the measured deadband. Raising it further makes the
-         * turret step in bigger jumps and it can start to hunt back and forth.
-         */
-        public static final double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
+        public static final double MIN_COMMAND_POWER = 0.15;
 
         /**
          * Time constant (seconds) of the low-pass filter on the target's angular velocity,
@@ -348,46 +335,27 @@ public final class RobotConstants {
          */
         public static final double SIDE_ANGLE_RADIANS = Math.toRadians(90.0);
 
-        /**
-         * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
-         * means the turret spins without limit and always takes the shortest path to the
-         * target. Set back to {@code true} if any cable can wrap around the turret.
-         */
-        public static final boolean USE_SOFT_LIMITS = false;
-
-        /**
-         * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
-         * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
-         */
-        // TODO(team): measure safe mechanical rotation limits in degrees
-        public static final double MIN_ANGLE_DEGREES = -180.0;
-        public static final double MAX_ANGLE_DEGREES = 180.0;
-        public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
-        public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
-
         /** Servo power cap in [0, 1]. Start low (0.5) for first tests, raise after tuning. */
         // TODO(team): raise once the turret behaves
         public static final double MAX_POWER = 0.9;
 
         /**
-         * Controller gains. Output is servo power per radian of error. There is no real
-         * feedback, so keep it simple: mostly KP. KD is 0 because the angle is only an
-         * estimate and a derivative term just adds noise.
+         * Controller gains. Output is servo power per radian of error. The through-bore
+         * encoder is the angle feedback.
          *
          * <p>KF is the static breakaway feedforward: it is added in the direction of the
          * error whenever the turret is outside tolerance, so the proportional term works
          * on top of the power needed just to start moving.
          *
-         * <p>KV is the velocity feedforward (power per rad/s of target motion). It is off
-         * (0). To make the turret keep pace with a moving target instead of trailing it,
-         * set it to {@code (1 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER}.
+         * <p>KV is the velocity feedforward (power per rad/s of target motion), sized so
+         * full turret speed takes about full servo power.
          */
         // TODO(team): tune on the robot
         public static final double KP = 1.0;
         public static final double KI = 0.0;
         public static final double KD = 0.0;
-        public static final double KV = 0.0;
-        public static final double KF = SERVO_DEADBAND_POWER;
+        public static final double KV = 1.0 / MAX_TARGET_VELOCITY_RAD_SEC;
+        public static final double KF = 0.08;
 
         /** Maximum integral accumulation (radians * seconds). */
         public static final double MAX_INTEGRAL = 0.5;
