@@ -61,6 +61,11 @@ public class IntakeSubsystem {
         transferMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // TODO(team): verify directions — FORWARD means positive power intakes/transfers
+        // NOTE: the turret's through-bore encoder is plugged into the INTAKE motor port's
+        // encoder socket (RobotConstants.Turret.ENCODER_PORT). Changing the intake
+        // direction here is safe for the turret, but never use RUN_USING_ENCODER,
+        // STOP_AND_RESET_ENCODER or setVelocity() on the intake motor: that would run
+        // the intake on the turret angle or wipe the turret zero.
         motor.setDirection(DcMotorSimple.Direction.FORWARD);
         transferMotor.setDirection(DcMotorSimple.Direction.FORWARD);
 

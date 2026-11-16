@@ -20,7 +20,8 @@ import com.pedropathing.math.Pose;
  *       {@code outtake_left}, {@code outtake_right}</li>
  *    <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
  *       {@code turretServoLeft}, {@code turretServoRight}, plus a REV Through Bore
- *       encoder named {@code turretEncoder}</li>
+ *       Encoder V2 plugged into the encoder socket of the {@code intake} motor port
+ *       (all eight motor ports are in use, so it has no config name of its own)</li>
  *    <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
  *    <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
@@ -44,6 +45,39 @@ public final class RobotConstants {
         public static final String TEST = "Test";
         public static final String SAMPLES = "Samples";
         public static final String PEDRO = "Pedro";
+    }
+
+    /**
+     * Driver Station names of the match OpModes, and which TeleOp follows autonomous.
+     *
+     * <p>Every OpMode name must be different. If two OpModes share a name the SDK renames
+     * both, and one of them stops being listed as Autonomous and loses its preselected
+     * TeleOp.
+     */
+    public static final class OpModeNames {
+        /** Name of {@link MainTeleOp} on the Driver Station. */
+        public static final String MAIN_TELEOP = "Main TeleOp";
+
+        /**
+         * The TeleOp the Driver Station switches to by itself when an autonomous ends.
+         * CHANGE THIS ONE LINE to send both autonomous programs to a different TeleOp.
+         * It must be exactly the {@code name} of an OpMode annotated {@code @TeleOp}
+         * (for example {@code "Test: Intake"}); if it matches nothing, no TeleOp is
+         * preselected.
+         *
+         * <p>The Driver Station selects that TeleOp for you. A driver still has to press
+         * Init and then Play: the Robot Controller only starts an OpMode when the Driver
+         * Station tells it to, so code cannot start TeleOp. Check the switch once on your
+         * own Driver Station: run an autonomous, let it end, and confirm this TeleOp is
+         * the one selected.
+         */
+        public static final String TELEOP_AFTER_AUTO = MAIN_TELEOP;
+
+        /** {@link MainAuto}: starts at the bottom of the field, (56, 8) facing 90 degrees. */
+        public static final String AUTO_BOTTOM = "AutoPath Bottom";
+
+        /** {@link SecondAuto}: starts at the top of the field, (56, 136) facing 270 degrees. */
+        public static final String AUTO_TOP = "AutoPath Top";
     }
 
     /**
@@ -226,29 +260,64 @@ public final class RobotConstants {
 
 
     /**
-     * goBILDA Gear-Driven Turret (2.75:1, 176T ring gear, 64T drive gears) driven by
-     * two continuous-rotation servos and measured by a REV Through Bore Encoder V2.
-     * The turret rotates continuously; there are no cable limits.
+     * goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by TWO continuous-rotation
+     * servos and measured by a REV Through Bore Encoder V2 mounted on one servo's output
+     * shaft. Both servos sit on the same side of the turret and their pinions mesh with the
+     * same turret gear. The turret angle is read from the encoder, so it does not drift.
      */
     public static final class Turret {
         // Hardware map names (must match the Robot Controller config exactly).
         public static final String SERVO_LEFT = "turretServoLeft";
         public static final String SERVO_RIGHT = "turretServoRight";
 
-        /** REV Through Bore Encoder V2, configured as a motor encoder port. */
-        public static final String ENCODER_PORT = "turretEncoder";
+        /**
+         * Config name of the MOTOR whose encoder socket the REV Through Bore Encoder V2
+         * is plugged into.
+         *
+         * <p>The robot already uses all eight motor ports (four drive, intake, transfer,
+         * two outtake), so the turret encoder cannot have a port or a config name of its
+         * own. Its 4-pin quadrature cable goes into the ENCODER socket next to a motor that
+         * does not use its own encoder, and the code reads the count through that motor.
+         * The intake motor is the right one: it runs without its encoder. Do NOT use the
+         * transfer or outtake ports (they run on their encoders).
+         * REV recommends hub motor ports 0 or 3 for this high-resolution encoder.
+         *
+         * <p>If the cable is in a different motor's encoder socket, put THAT motor's config
+         * name here. The turret code only reads the count; it never changes that motor's
+         * mode, power or direction.
+         */
+        // TODO(team): confirm the encoder cable is in the intake motor's encoder socket
+        public static final String ENCODER_PORT = Intake.MOTOR;
 
-        /** Quadrature counts per revolution of the REV Through Bore Encoder V2. */
+        /** Quadrature counts per revolution of the REV Through Bore Encoder V2 (2048 CPR x 4). */
         public static final double ENCODER_TICKS_PER_REV = 8192.0;
 
-        /**
-         * Encoder shaft turns per turret turn. 64T drive gear on a 176T ring gear
-         * is {@code 64/176} (1/2.75). Change the numerator if the encoder pinion
-         * tooth count is not 64.
-         */
-        public static final double ENCODER_TO_TURRET_RATIO = 64.0 / 176.0;
+        /** Servo turns per one turret turn, fixed by the 2.75:1 gear-driven turret. */
+        public static final double GEAR_RATIO = 2.75;
 
-        /** Set true if counterclockwise turret rotation produces negative ticks. */
+        /**
+         * Turret turns per ONE encoder turn. The encoder rides on a servo output shaft, and
+         * the servo pinion turns {@link #GEAR_RATIO} times per turret turn, so this is
+         * {@code 1 / GEAR_RATIO}. If the encoder is ever moved onto the turret ring itself,
+         * set this to 1.0. Check: one full turret turn by hand must change
+         * {@code Turret encoderTicks} by 22528.
+         */
+        public static final double ENCODER_TO_TURRET_RATIO = 1.0 / GEAR_RATIO;
+
+        /**
+         * Set true if turning the turret counterclockwise (looking down from above, the
+         * +angle direction) makes {@code Turret measuredAngleDeg} go DOWN. A pinion on a
+         * ring gear spins opposite to the ring, so this often needs to be true.
+         *
+         * <p>Check it in INIT of Main TeleOp, before Play: the turret servos are unpowered
+         * there and the init screen shows the live angle and ticks, so turn the turret by
+         * hand and watch. The sign also depends on the motor TYPE chosen for the shared
+         * port in the Robot Controller config (some types, such as goBILDA 5202 and REV HD
+         * Hex, are counted in reverse), so re-check this flag after changing the type. The
+         * intake motor's own FORWARD/REVERSE setting does not matter: TurretSubsystem
+         * cancels it out.
+         */
+        // TODO(team): confirm on the robot
         public static final boolean ENCODER_REVERSED = false;
 
         /**
@@ -266,27 +335,64 @@ public final class RobotConstants {
         public static final boolean SERVO_LEFT_REVERSED = false;
         public static final boolean SERVO_RIGHT_REVERSED = false;
 
-        /** Servo turns per one turret turn, fixed by the 2.75:1 gear-driven turret. */
-        public static final double GEAR_RATIO = 2.75;
+        /**
+         * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
+         * Spec sheets usually give seconds per 60 degrees: RPM = 10 / (seconds per 60 degrees).
+         * Use the figure for the voltage the servos actually run at.
+         */
+        // 230 servo RPM / 2.75 = 83.63 RPM at the turret (goBILDA Super Speed, near no load).
+        // Do not lower this back to a placeholder: too low makes the turret overshoot.
+        public static final double SERVO_FREE_SPEED_RPM = 230.0;
 
         /**
-         * Fastest target motion (rad/s) the velocity feedforward is allowed to chase.
-         * 8.76 rad/s is 83.63 RPM at the turret for two goBILDA Super Speed servos.
-         * Use 4.23 if the turret is driven by Axon MINI servos instead.
+         * Turret speed (radians/second) at power 1.0, from the servo speed and the gear
+         * ratio. The encoder measures the real angle, so this no longer affects aiming
+         * accuracy. It only caps how fast a target may appear to move for the {@link #KV}
+         * feedforward and sizes {@link #KV} itself.
          */
-        public static final double MAX_TARGET_VELOCITY_RAD_SEC = 8.76;
+        public static final double RAD_PER_SEC_AT_FULL_POWER =
+                SERVO_FREE_SPEED_RPM * 2.0 * Math.PI / 60.0 / GEAR_RATIO;
 
         /**
-         * Smallest power sent to the servos while the turret is outside
-         * {@link #ANGLE_TOLERANCE_RADIANS}, so a small error still overcomes stiction.
+         * Servo power at or below which the turret does NOT move (servo dead zone plus
+         * turret friction). Used to size {@link #MIN_COMMAND_POWER} and {@link #KF}.
+         *
+         * <p>To measure: command the turret servos at a fixed low power and raise it in
+         * small steps until the turret just starts to turn in both directions; use the
+         * larger of the two values.
          */
-        public static final double MIN_COMMAND_POWER = 0.15;
+        // TODO(team): measure on the robot (0.08 is only a placeholder)
+        public static final double SERVO_DEADBAND_POWER = 0.08;
+
+        /**
+         * Smallest power used for a correction TOWARD the target while the turret is outside
+         * {@link #ANGLE_TOLERANCE_RADIANS}. Must stay above {@link #SERVO_DEADBAND_POWER} so
+         * the correction actually moves the turret. While the target is moving, weaker (or
+         * zero) power can still be sent: feedforward in the other direction is left alone,
+         * and a turret that is ahead of a target coming toward it just waits. Raising this
+         * makes the turret step in bigger jumps and it can start to hunt back and forth.
+         */
+        public static final double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
 
         /**
          * Time constant (seconds) of the low-pass filter on the target's angular velocity,
          * which feeds {@link #KV}. Larger is smoother but lags more; 0 turns the filter off.
          */
         public static final double TARGET_VELOCITY_FILTER_SECONDS = 0.10;
+
+        /**
+         * Target angular speed (radians/second) above which the target counts as MOVING.
+         * While it is moving, the turret keeps following with feedforward even inside
+         * {@link #ANGLE_TOLERANCE_RADIANS} instead of stopping dead, so it does not
+         * stop-start while the chassis spins. Below this speed the turret stops once aimed.
+         */
+        public static final double TARGET_MOVING_THRESHOLD_RAD_SEC = Math.toRadians(10.0);
+
+        /**
+         * Longest time (milliseconds) the TeleOp shoot sequence waits for the turret to
+         * finish aiming before it fires anyway. Only applies while the turret is TRACKING.
+         */
+        public static final double AIM_WAIT_TIMEOUT_MS = 750.0;
 
         /**
          * Turret pivot offset from the robot's localization center in inches
@@ -316,14 +422,9 @@ public final class RobotConstants {
         /** Dead band (inches) around the switch line so the target does not flicker. */
         public static final double SIDE_HYSTERESIS_INCHES = 3.0;
 
-        /** Target used before the first pose arrives (the top side). */
+        /** Target used before the first pose arrives (the bottom side). */
         public static final double DEFAULT_TARGET_X_INCHES = BOTTOM_TARGET_X_INCHES;
         public static final double DEFAULT_TARGET_Y_INCHES = BOTTOM_TARGET_Y_INCHES;
-
-        /** Secondary target coordinates, selected with Gamepad 2 Dpad Down in TeleOp. */
-        // TODO(team): set secondary target X and Y coordinates in inches
-        public static final double CENTER_TARGET_X_INCHES = 72.0;
-        public static final double CENTER_TARGET_Y_INCHES = 72.0;
 
         /** Chassis-relative angle (radians) the turret returns to in HOME mode. */
         public static final double HOME_ANGLE_RADIANS = 0.0;
@@ -335,27 +436,113 @@ public final class RobotConstants {
          */
         public static final double SIDE_ANGLE_RADIANS = Math.toRadians(90.0);
 
-        /** Servo power cap in [0, 1]. Start low (0.5) for first tests, raise after tuning. */
-        // TODO(team): raise once the turret behaves
+        /**
+         * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
+         * means the turret spins without limit and always takes the shortest path to the
+         * target. Set back to {@code true} if any cable can wrap around the turret.
+         */
+        public static final boolean USE_SOFT_LIMITS = false;
+
+        /**
+         * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
+         * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
+         */
+        // TODO(team): measure safe mechanical rotation limits in degrees
+        public static final double MIN_ANGLE_DEGREES = -180.0;
+        public static final double MAX_ANGLE_DEGREES = 180.0;
+        public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
+        public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
+
+        /**
+         * Servo power cap in [0, 1], and the power used for the fast part of every move
+         * (anything farther from the target than {@link #SLOWDOWN_START_DEGREES}).
+         * Start low (0.3 to 0.5) for first tests.
+         *
+         * <p>The slow-down ramp counts DOWN from this power, so changing MAX_POWER shifts
+         * the power at every distance inside the slow zone by the same amount. Re-tune
+         * {@link #SLOWDOWN_START_DEGREES} and {@link #SLOWDOWN_POWER_PER_DEGREE} every time
+         * this changes. At a low MAX_POWER the values tuned for 0.9 make the turret crawl
+         * at minimum power for a long way (at 0.4 with 0.018 per degree, a
+         * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
+         */
+        // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
         public static final double MAX_POWER = 0.9;
 
         /**
-         * Controller gains. Output is servo power per radian of error. The through-bore
-         * encoder is the angle feedback.
+         * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
+         * STARTS slowing down.
          *
-         * <p>KF is the static breakaway feedforward: it is added in the direction of the
-         * error whenever the turret is outside tolerance, so the proportional term works
-         * on top of the power needed just to start moving.
+         * <p>Farther from the target than this, the turret runs flat out at
+         * {@link #MAX_POWER}. Once it is closer than this, the power is reduced by
+         * {@link #SLOWDOWN_POWER_PER_DEGREE} for every degree it gets closer, but never
+         * below {@link #MIN_COMMAND_POWER}. Inside {@link #ANGLE_TOLERANCE_RADIANS} it stops.
          *
-         * <p>KV is the velocity feedforward (power per rad/s of target motion), sized so
-         * full turret speed takes about full servo power.
+         * <p>Tuning: if the turret OVERSHOOTS the target and comes back, make this BIGGER so
+         * it starts braking earlier. If it slows down too early and wastes time, make it
+         * smaller.
+         *
+         * <p>The two knobs are linked. The power only gets down to the minimum before the
+         * target if {@code SLOWDOWN_START_DEGREES * SLOWDOWN_POWER_PER_DEGREE} is at least
+         * {@code MAX_POWER - MIN_COMMAND_POWER} (0.75 with the values here; 45 x 0.018 is
+         * 0.81). A turret that arrives above the minimum power does not stop: it swings
+         * back and forth across the target. So when this is made smaller the code makes
+         * the slow-down steeper by itself to keep that from happening (see
+         * {@link #SLOWDOWN_POWER_PER_DEGREE}); a very small zone therefore means very
+         * hard braking, and a heavy turret will still overshoot it.
          */
         // TODO(team): tune on the robot
-        public static final double KP = 1.0;
+        public static final double SLOWDOWN_START_DEGREES = 45.0;
+
+        /**
+         * TURNING SPEED PROFILE, knob 2 of 2: how quickly the turret slows down once it is
+         * inside {@link #SLOWDOWN_START_DEGREES}, as servo power removed per degree closer
+         * to the target.
+         *
+         * <p>Power at a given distance inside the zone is
+         * {@code MAX_POWER - SLOWDOWN_POWER_PER_DEGREE * (SLOWDOWN_START_DEGREES - distance)},
+         * held at {@link #MIN_COMMAND_POWER} once it gets that low. With the values here
+         * (0.9 max, 45 degrees, 0.018 per degree, 0.15 min) the power is 0.9 at 45 degrees,
+         * 0.45 at 20 degrees, 0.27 at 10 degrees, and reaches the 0.15 minimum at about
+         * 3.3 degrees, then creeps the rest of the way.
+         *
+         * <p>Tuning: a BIGGER number brakes harder, so the turret reaches the slow creep
+         * sooner and travels the last part slowly (safe, but slower). A SMALLER number
+         * brakes more gently and saves time.
+         *
+         * <p>There is a lowest value that can work:
+         * {@code (MAX_POWER - MIN_COMMAND_POWER) / SLOWDOWN_START_DEGREES} (0.0167 with the
+         * values here). That value reaches the minimum power exactly at the target. Below
+         * it the turret would still be driving hard when it arrives and would swing back
+         * and forth across the target without stopping, so the code never uses less than
+         * that: a number smaller than the limit (or 0) simply behaves like the limit.
+         * Staying about 10 percent above it, as 0.018 does, leaves a short creep at the end.
+         */
+        // TODO(team): tune on the robot
+        public static final double SLOWDOWN_POWER_PER_DEGREE = 0.018;
+
+        /**
+         * Extra controller terms on top of the turning speed profile above. The profile
+         * decides the power from the distance to the target; these add to it.
+         *
+         * <p>KI and KD are off (0). Add a little KD only if the turret still overshoots
+         * after the two slow-down knobs are tuned. If the turret stops short of the target,
+         * measure {@link #SERVO_DEADBAND_POWER} first (it is set too low); KI would also
+         * fix it, but KI builds up during every long move and makes the turret overshoot more.
+         *
+         * <p>KF is the breakaway power: the power needed just to start the turret moving.
+         * It is used when the turret is already aimed and only has to keep pace with a
+         * moving target.
+         *
+         * <p>KV is the velocity feedforward (power per rad/s of target motion), sized so
+         * full turret speed takes about full servo power. It lets the turret keep pace
+         * with the target while the chassis spins instead of trailing behind it. Set to
+         * 0 to turn it off.
+         */
+        // TODO(team): tune on the robot
         public static final double KI = 0.0;
         public static final double KD = 0.0;
-        public static final double KV = 1.0 / MAX_TARGET_VELOCITY_RAD_SEC;
-        public static final double KF = 0.08;
+        public static final double KV = (1.0 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER;
+        public static final double KF = SERVO_DEADBAND_POWER;
 
         /** Maximum integral accumulation (radians * seconds). */
         public static final double MAX_INTEGRAL = 0.5;
@@ -388,7 +575,7 @@ public final class RobotConstants {
     }
 
     /**
-     * Timings for the autonomous "shoot balls" command in {@code MainAuto}.
+     * Timings for the "shoot balls" command in {@code SecondAuto} and {@code MainTeleOp}.
      */
     public static final class Auto {
         /** Longest time to wait for the flywheels to reach speed before shooting anyway. */

@@ -35,15 +35,16 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
  * <p>Do not run path-following (home pose) until Pinpoint and Foresight are
  * tuned. Manual drive still works before that if motor directions are right.
  */
-@TeleOp(name = "Main TeleOp", group = RobotConstants.OpModeGroups.TELEOP)
+@TeleOp(name = RobotConstants.OpModeNames.MAIN_TELEOP, group = RobotConstants.OpModeGroups.TELEOP)
 public class MainTeleOp extends OpMode {
 
     /**
      * Set to {@code false} to run TeleOp without the turret. While
-     * {@code false} the two turret servos are never touched (no hardware
-     * lookup, no power), so TeleOp runs fine without them configured.
+     * {@code false} the two turret servos and the turret encoder are never
+     * touched (no hardware lookup, no power), so TeleOp runs fine without
+     * them configured.
      */
-    private static final boolean TURRET_ENABLED = false;
+    private static final boolean TURRET_ENABLED = true;
 
     /**
      * Set to {@code true} to bring back the two-position {@code flower} servo
@@ -61,12 +62,16 @@ public class MainTeleOp extends OpMode {
 
     private final ToggleButton fieldCentricToggle = new ToggleButton();
     private final ToggleButton homeToggle = new ToggleButton();
+    private final ToggleButton opposeToggle = new ToggleButton();
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
     private final ToggleButton servoToggle = new ToggleButton();
     private final ToggleButton turretHiveToggle = new ToggleButton();
-    private final ToggleButton turretCenterToggle = new ToggleButton();
     private final ToggleButton turretHomeToggle = new ToggleButton();
+    private final ToggleButton turretZeroToggle = new ToggleButton();
+    private final ToggleButton poseDefaultToggle = new ToggleButton();
+    private final ToggleButton poseAutoToggle = new ToggleButton();
+    private final ToggleButton poseResumeToggle = new ToggleButton();
 
     private boolean fieldCentric;
     private double fieldCentricOffsetRad;
@@ -79,6 +84,17 @@ public class MainTeleOp extends OpMode {
 
     private long lastLoopNanos;
 
+    /** Pose the follower was told it starts at, and where that pose came from. */
+    private Pose startPose;
+    private String startPoseSource = "";
+
+    /**
+     * Where the turret zero came from if it was NOT taken on this init screen
+     * ("the last autonomous" or "the last TeleOp"), or {@code null} if the turret
+     * was zeroed where it points now.
+     */
+    private String turretZeroKeptFrom;
+
     /**
      * Builds the follower and intake. Drive commands start in {@link #loop()}
      * because Pedro 3 TeleOp docs use {@code follower.manual()} there, not a
@@ -89,8 +105,15 @@ public class MainTeleOp extends OpMode {
         Scheduler.reset();
         follower = Constants.create(hardwareMap);
 
-        boolean poseFromAuto = PoseStorage.lastAutoPose != null;
-        follower.setPose(poseFromAuto ? PoseStorage.lastAutoPose : RobotConstants.Field.START_POSE);
+        // Start from where autonomous ended if one just ran, otherwise from the
+        // default start pose. The driver can change this on the init screen
+        // (see init_loop) because the turret aims from this pose all match.
+        if (PoseStorage.lastAutoPose != null) {
+            applyStartPose(PoseStorage.lastAutoPose, "FROM AUTO");
+        } else {
+            // No unused autonomous pose: none has run, or a TeleOp already used it.
+            applyStartPose(RobotConstants.Field.START_POSE, "DEFAULT START (no saved auto pose)");
+        }
 
         fieldCentric = false;
         fieldCentricOffsetRad = 0.0;
@@ -109,48 +132,177 @@ public class MainTeleOp extends OpMode {
         }
 
         // Turret aims continuously at the hive using the follower's pose, and
-        // picks the top or bottom hive side from the robot's Y position. Its
-        // The through-bore encoder is zeroed here, so the turret must be
-        // pointing straight forward right now. Skipped entirely while
-        // TURRET_ENABLED is false.
+        // picks the top or bottom hive side from the robot's Y position. The
+        // constructor zeroes the through-bore encoder here. That zero is only
+        // kept when no autonomous has just run (see below); then the turret
+        // must be pointing straight forward right now (or press Gamepad 2 Y on
+        // the init screen once it is). Must be built AFTER the intake, because
+        // the encoder is read through the intake motor's port. Skipped
+        // entirely while TURRET_ENABLED is false.
+        turretZeroKeptFrom = null;
         if (TURRET_ENABLED) {
             turret = new TurretSubsystem(hardwareMap);
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         } else {
             turret = null;
         }
+        // Coming straight from autonomous: keep the turret zero that autonomous
+        // recorded instead of the one just taken, because the turret may have
+        // moved during autonomous and nobody may touch the robot in between.
+        if (PoseStorage.lastAutoPose != null) {
+            restoreTurretZero(PoseStorage.lastAutoTurretZeroTicks, "the last autonomous");
+        }
 
         drivingToHome = false;
         speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
+        writeInitTelemetry();
+    }
+
+    /**
+     * Runs repeatedly between Init and Play. Nothing moves here: the turret
+     * servos are still unpowered, so the turret can be turned by hand.
+     *
+     * <ul>
+     *   <li>Shows the start pose the turret will aim from, and lets Gamepad 1
+     *       pick a different one. Each choice brings its turret zero with it:
+     *       Dpad Left = default start pose, turret zeroed where it points now;
+     *       Dpad Up = pose and turret zero from the last autonomous; Dpad Right
+     *       = pose and turret zero from the last TeleOp (for a restart in the
+     *       middle of a match).</li>
+     *   <li>Shows the LIVE turret angle and encoder ticks, so the encoder
+     *       direction and the zero can be checked before the servos get
+     *       power. Gamepad 2 Y re-zeroes the turret where it points now.</li>
+     * </ul>
+     */
+    @Override
+    public void init_loop() {
+        // Each start-pose choice brings its matching turret zero with it.
+        if (poseDefaultToggle.update(gamepad1.dpad_left)) {
+            // Robot was placed by hand on the start tile: zero the turret where it
+            // points now (it must be straight forward).
+            applyStartPose(RobotConstants.Field.START_POSE, "DEFAULT START (driver chose)");
+            zeroTurretHere();
+        }
+        if (poseAutoToggle.update(gamepad1.dpad_up) && PoseStorage.lastAutoPose != null) {
+            applyStartPose(PoseStorage.lastAutoPose, "FROM AUTO");
+            restoreTurretZero(PoseStorage.lastAutoTurretZeroTicks, "the last autonomous");
+        }
+        if (poseResumeToggle.update(gamepad1.dpad_right) && PoseStorage.lastTeleOpPose != null) {
+            applyStartPose(PoseStorage.lastTeleOpPose, "LAST TELEOP (driver chose)");
+            // In a mid-match restart nobody can straighten the turret by hand, so
+            // it is probably NOT pointing forward now. The hub kept counting while
+            // TeleOp was stopped, so bring back the zero that TeleOp was using.
+            // Gamepad 2 Y still overrides it.
+            restoreTurretZero(PoseStorage.lastTeleOpTurretZeroTicks, "the last TeleOp");
+        }
+
+        if (turret != null) {
+            if (turretZeroToggle.update(gamepad2.y)) {
+                zeroTurretHere();
+            }
+            // Read-only: updates the angle and ticks without powering the servos.
+            turret.refresh();
+        }
+
+        writeInitTelemetry();
+    }
+
+    /** Declares the turret's current direction to be straight forward. */
+    private void zeroTurretHere() {
+        if (turret != null) {
+            turret.resetAngle();
+            turretZeroKeptFrom = null;
+        }
+    }
+
+    /**
+     * Brings back a turret zero saved by an earlier OpMode, so the turret does not
+     * have to be pointing forward now. Does nothing if there is no saved zero.
+     *
+     * @param zeroTicks saved encoder count that means straight forward, or null
+     * @param from      short label shown on the Driver Station
+     */
+    private void restoreTurretZero(Integer zeroTicks, String from) {
+        if (turret != null && zeroTicks != null) {
+            turret.restoreZero(zeroTicks);
+            turretZeroKeptFrom = from;
+        }
+    }
+
+    /**
+     * Tells the follower (and so the turret) where the robot is starting.
+     *
+     * @param pose   field pose to start from
+     * @param source short label shown on the Driver Station
+     */
+    private void applyStartPose(Pose pose, String source) {
+        follower.setPose(pose);
+        startPose = pose;
+        startPoseSource = source;
+    }
+
+    /**
+     * Init screen: start pose, live turret readout, then the button list.
+     * Called every init_loop because telemetry is cleared on each update.
+     */
+    private void writeInitTelemetry() {
         telemetry.addLine("Main TeleOp ready");
-        telemetry.addData("Start pose", poseFromAuto ? "FROM AUTO" : "DEFAULT (no auto run)");
-        telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric default)");
-        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  X = field-centric  |  LB hold = slow");
-        telemetry.addLine("G1: Back = reset field-centric forward  |  Y = drive home"
+        telemetry.addData("Start pose", startPoseSource);
+        telemetry.addData("Start X / Y / Heading", "%.1f in / %.1f in / %.1f deg",
+                startPose.x(), startPose.y(), Math.toDegrees(startPose.heading()));
+        telemetry.addLine("  Is the robot REALLY there? If not: G1 Dpad Left = default start"
+                + (turret != null ? " + zero turret HERE" : "")
+                + (PoseStorage.lastAutoPose != null ? "  |  Dpad Up = auto pose + turret zero" : "")
+                + (PoseStorage.lastTeleOpPose != null ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
+        if (turret != null) {
+            telemetry.addData("Turret measuredAngleDeg (live)", "%.1f", turret.getCurrentAngleDegrees());
+            telemetry.addData("Turret encoderTicks (live)", turret.getEncoderTicks());
+            telemetry.addLine(turretZeroKeptFrom != null
+                    ? "  Turret zero KEPT from " + turretZeroKeptFrom
+                            + ": a non-zero angle is correct. G2 Y = zero it here instead."
+                    : "  Turret must point straight forward and read 0.0. G2 Y = zero it here.");
+            telemetry.addLine("  Check: turn it LEFT by hand (counterclockwise from above), angle must go UP.");
+            telemetry.addLine("  The turret starts moving by itself when you press Play. Hands clear.");
+        } else {
+            telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
+        }
+        telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric)");
+        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  LB hold = slow");
+        telemetry.addLine("G1: X = drive to start pose  |  B = drive to opposite pose  |  any stick cancels"
                 + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
-        telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (same as auto)");
+        telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (waits for the turret to aim)");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
-        if (TURRET_ENABLED) {
-            telemetry.addLine("G2: Dpad Up = turret HIVE (auto side)  |  Dpad Down = turret CENTER  |  LB = turret 90 deg / back");
-            telemetry.addLine("Turret must be pointing straight forward now");
-        } else {
-            telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
+        if (turret != null) {
+            telemetry.addLine("G2: Dpad Up = turret aims at the HIVE (top/bottom side picked automatically)");
+            telemetry.addLine("G2: LB = turret 90 deg left / straight forward (Dpad Up to aim again)");
         }
         telemetry.update();
     }
 
     /**
-     * Resets the loop-time and turret clocks when the driver presses Play so
-     * the time spent sitting in init does not show up on the first loop.
+     * Resets the loop timer when the driver presses Play so the time spent
+     * sitting in init does not show up on the first loop.
+     *
+     * <p>The turret is NOT re-zeroed here. Its zero came from the autonomous
+     * that just ran, or was taken at Init or with Gamepad 2 Y on the init
+     * screen, or was restored with Gamepad 1 Dpad Right. The encoder has been
+     * counting ever since, so a turret that moved in between is still measured
+     * correctly.
      */
     @Override
     public void start() {
         lastLoopNanos = System.nanoTime();
+        // The autonomous pose has now been used. Clear it so a later practice
+        // TeleOp does not silently start from an old autonomous end pose.
+        PoseStorage.lastAutoPose = null;
+        PoseStorage.lastAutoTurretZeroTicks = null;
+        // Remember the turret zero this TeleOp runs with, next to the TeleOp pose,
+        // so a restart in the middle of a match can restore both.
         if (turret != null) {
-            turret.resetAngle();
+            PoseStorage.lastTeleOpTurretZeroTicks = turret.getZeroOffsetTicks();
         }
     }
 
@@ -204,13 +356,14 @@ public class MainTeleOp extends OpMode {
             fieldCentricOffsetRad = follower.pose().heading();
         }
 
-        // ---- Optional drive-to-home ----
+        // ---- Optional drive-to-pose (each button needs its OWN edge detector) ----
+        // Gamepad 1 X: drive to the start pose.
         if (homeToggle.update(gamepad1.x)) {
             startDriveToStart();
         }
 
-        // ---- Optional drive-to-home ----
-        if (homeToggle.update(gamepad1.b)) {
+        // Gamepad 1 B: drive to the opposite start pose.
+        if (opposeToggle.update(gamepad1.b)) {
             startDriveToOppose();
         }
 
@@ -233,8 +386,9 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Shoot balls (Gamepad 2 RT) ----
-        // Same Ivy sequence as MainAuto. Rising edge starts it; it runs to
-        // completion. Face buttons and LT are ignored while it is active.
+        // Ivy sequence built in shootBalls() below (it also waits for the turret
+        // to aim; SecondAuto has its own version). Rising edge starts it; it runs
+        // to completion. Face buttons and LT are ignored while it is active.
         boolean shootPressed = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
         boolean shooting = isShootActive();
         if (shootPressed && !wasShootTrigger && !shooting) {
@@ -262,6 +416,9 @@ public class MainTeleOp extends OpMode {
         intake.update();
         outtake.update();
         follower.update();
+        // Remember where we are, so a TeleOp restart in the middle of a match
+        // can resume from here (Gamepad 1 Dpad Right on the init screen).
+        PoseStorage.lastTeleOpPose = follower.pose();
         // Aim with the freshest localizer pose, every loop, no blocking.
         if (turret != null) {
             turret.update(follower.pose());
@@ -297,10 +454,10 @@ public class MainTeleOp extends OpMode {
 
     /**
      * Starts a straight line from the robot's current pose to
-     * {@link RobotConstants.Field#SCORE_POSE}.
+     * {@link RobotConstants.Field#START_POSE}.
      *
-     * <p>If the robot is already at {@code SCORE_POSE}, a zero-length line path
-     * cannot be constructed, so it simply holds the score pose instead.
+     * <p>If the robot is already there, a zero-length line path cannot be
+     * constructed, so it simply holds that pose instead.
      */
     private void startDriveToStart() {
         Pose current = follower.pose();
@@ -317,9 +474,14 @@ public class MainTeleOp extends OpMode {
         drivingToHome = true;
     }
 
+    /**
+     * Starts a straight line from the robot's current pose to
+     * {@link RobotConstants.Field#OPPOSE_POSE} (the start pose at the other
+     * end of the field).
+     */
     private void startDriveToOppose() {
         Pose current = follower.pose();
-        Pose home = RobotConstants.Field.START_POSE;
+        Pose home = RobotConstants.Field.OPPOSE_POSE;
 
         if (current.distance(home) < 0.5) {
             follower.hold(home);
@@ -388,14 +550,22 @@ public class MainTeleOp extends OpMode {
 
     /**
      * TeleOp shoot sequence: wait for the already-running flywheels to be at
-     * speed, open the gate, feed with intake and transfer, then stop the feed
-     * and close the gate. The flywheels are left running.
+     * speed, wait for the turret to finish aiming, open the gate, feed with
+     * intake and transfer, then stop the feed and close the gate. The
+     * flywheels are left running.
+     *
+     * <p>Both waits have a timeout, so a slow flywheel or a turret that never
+     * settles delays the shot but cannot block it forever.
      */
     private Command shootBalls() {
         return sequential(
                 race(
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
+                ),
+                race(
+                        waitUntil(() -> turretReadyToShoot()),
+                        waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
@@ -412,6 +582,18 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
+     * @return {@code true} if the shot does not need to wait for the turret:
+     *         there is no turret, the turret is aimed at its target, or the
+     *         operator has deliberately parked it (HOME / DISABLED) and is
+     *         aiming with the whole robot instead
+     */
+    private boolean turretReadyToShoot() {
+        return turret == null
+                || turret.getMode() != TurretSubsystem.TurretMode.TRACKING
+                || turret.isAimedAtTarget();
+    }
+
+    /**
      * @return {@code true} if the shoot-balls Ivy command is still scheduled
      *         or running
      */
@@ -421,23 +603,16 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Gamepad 2 turret controls. Dpad Up aims at the hive, with the top or
-     * bottom side picked automatically from the robot's Y position. Dpad Down
-     * aims at the fixed CENTER target instead. LB stops tracking and turns the
-     * turret 90 degrees ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from
-     * straight forward; pressing LB again turns it back 90 degrees to straight
-     * forward. Dpad Up or Dpad Down returns the turret to TRACKING.
+     * Gamepad 2 turret controls. The hive is the only target. Dpad Up aims at
+     * it, with the top or bottom side picked automatically from the robot's Y
+     * position. LB stops tracking and turns the turret 90 degrees
+     * ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from straight forward;
+     * pressing LB again turns it back 90 degrees to straight forward. Dpad Up
+     * returns the turret to TRACKING.
      */
     private void updateTurretFromGamepad() {
         if (turretHiveToggle.update(gamepad2.dpad_up)) {
             turret.setAutoSelectSide(true);
-            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
-        }
-        if (turretCenterToggle.update(gamepad2.dpad_down)) {
-            turret.setTargetCoordinate(
-                    RobotConstants.Turret.CENTER_TARGET_X_INCHES,
-                    RobotConstants.Turret.CENTER_TARGET_Y_INCHES
-            );
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         }
         if (turretHomeToggle.update(gamepad2.left_bumper)) {
@@ -466,6 +641,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("X (in)", pose.x());
         telemetry.addData("Y (in)", pose.y());
         telemetry.addData("Heading (deg)", Math.toDegrees(pose.heading()));
+        telemetry.addData("Start pose was", startPoseSource);
         telemetry.addData("Drive mode", fieldCentric ? "FIELD" : "ROBOT");
         telemetry.addData("Drive speed", "%.0f%%", speedMultiplier * 100.0);
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");

@@ -29,7 +29,7 @@ Use these names exactly. They are stored in `RobotConstants`.
 | Outtake gate | Servo | `outtake_gate` |
 | Turret left | CR Servo | `turretServoLeft` |
 | Turret right | CR Servo | `turretServoRight` |
-| Turret encoder | Motor encoder | `turretEncoder` |
+| Turret encoder | REV Through Bore Encoder V2, cable in the **encoder socket of the `intake` motor port** | none (read through `intake`, see `Turret.ENCODER_PORT`) |
 | Flower servo | Servo | `flower` |
 | goBILDA Pinpoint | I2C | `pinpoint` |
 
@@ -67,8 +67,9 @@ Team code is one package. The only extra folder is `pedroPathing/`, which holds 
 TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
 ├── RobotConstants.java          Hardware names, powers, PIDF gains, field targets
 ├── MainTeleOp.java              Match drive + intake/transfer/outtake/servo/turret
-├── MainAuto.java                Autonomous path (Pedro + Ivy)
-├── PoseStorage.java             Hands ending auto pose to TeleOp
+├── MainAuto.java                Autonomous from the (56, 8) start (Pedro + Ivy)
+├── SecondAuto.java              Autonomous from the (56, 136) start: shoot, then path
+├── PoseStorage.java             Hands the last auto / TeleOp pose and turret zero to TeleOp
 ├── IntakeSubsystem.java         Intake + transfer motors
 ├── OuttakeSubsystem.java        Dual velocity-controlled outtake motors
 ├── TurretSubsystem.java         Two-servo turret aimed from the Pedro pose
@@ -95,7 +96,8 @@ SDK samples stay in `FtcRobotController/.../external/samples/` and are already `
 
 | Name | Group | What it does |
 |---|---|---|
-| **AutoPath** | Auto | Autonomous path (Pedro + Ivy), hands final pose to TeleOp |
+| **AutoPath Bottom** | Autonomous | `MainAuto`: starts at (56, 8, 90°) and drives one line. Saves its pose and the turret zero for TeleOp, then the Driver Station preselects the TeleOp named in `OpModeNames.TELEOP_AFTER_AUTO` |
+| **AutoPath Top** | Autonomous | `SecondAuto`: starts at (56, 136, 270°), shoots, then drives. Same hand-off to TeleOp |
 | **Main TeleOp** | TeleOp | Match drive + intake, transfer, outtake, servo, turret |
 | **Test: Intake** | Test | Intake and transfer motors |
 | **Test: Outtake** | Test | Dual outtake motors at `Outtake.TARGET_RPM` |
@@ -106,7 +108,9 @@ SDK samples stay in `FtcRobotController/.../external/samples/` and are already `
 
 Safe order the first time you have a robot: **Test: Drive Directions** → **Test: Intake** → **Main TeleOp** on a stand → **Main TeleOp** on the floor.
 
-Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is tuned. Those move the robot using localization.
+Do **not** press gamepad 1 **X** or **B** (drive to a pose) or run Foresight tests until Pinpoint is tuned. Those move the robot using localization.
+
+**Main TeleOp init screen (between Init and Play).** Nothing moves here and the turret servos are unpowered. The screen shows the start pose the turret will aim from; if the robot is not really there, gamepad 1 **Dpad Left** picks the default start pose and zeroes the turret where it points, **Dpad Up** the pose and turret zero from the last autonomous, **Dpad Right** the pose and turret zero from the last TeleOp (for a restart mid-match). It also shows the live turret angle and encoder ticks. Straight after an autonomous the turret zero is kept from that autonomous, so the turret shows its real angle and does not have to be touched; otherwise it must point straight forward and read 0.0 (gamepad 2 **Y** zeroes it where it points). Turning it left by hand must make the angle go up. The turret starts moving by itself on Play.
 
 ### Main TeleOp (gamepad 1 — drive)
 
@@ -116,10 +120,10 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | Right stick X | Turn |
 | Dpad Up / Down | Drive speed +10% / -10% |
 | Left bumper (hold) | Slow mode (30%) |
-| X | Toggle field-centric drive |
-| Back | Set current heading as field-centric forward (preserves localizer pose for turret) |
+| X | Follow a line to the start pose `Field.START_POSE` (cancels if you move a stick) |
+| B | Follow a line to the opposite start pose `Field.OPPOSE_POSE` (cancels if you move a stick) |
+| Back | Set current heading as field-centric forward (preserves localizer pose for turret). Field-centric drive itself has no button bound right now. |
 | A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` (currently disabled: `FLOWER_SERVO_ENABLED = false` in `MainTeleOp`) |
-| Y | Follow a line to the score pose (cancels if you move a stick) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
 
@@ -131,12 +135,13 @@ Do **not** press **Y (drive to home)** or run Foresight tests until Pinpoint is 
 | B (hold) | Reverse transfer motor |
 | (none, automatic) | Outtake motors run at `Outtake.TARGET_RPM` from Play until Stop |
 | Left trigger (hold) | Open outtake gate (closes on release; ignored while RT shoot is running) |
-| Right trigger (press) | Run `shootBalls` (spin up → open gate → feed → stop) |
+| Right trigger (press) | Run `shootBalls` (wait for flywheels → wait up to `Turret.AIM_WAIT_TIMEOUT_MS` for the turret to be aimed, only while it is tracking → open gate → feed → stop) |
 | Dpad Up | Turret: aim at the hive, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
-| Dpad Down | Turret: aim at the Center target (`Turret.CENTER_TARGET_*`) |
 | Left bumper | Turret: stop tracking and turn 90° from forward; press again to turn back to forward |
 
-The turret is the goBILDA Gear-Driven Turret (2.75:1, 176T ring, 64T drive gears) driven by two continuous-rotation servos and measured by a REV Through Bore Encoder V2 (`turretEncoder`, 8192 CPR). Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop. It must point straight forward when the OpMode starts, because that pose is the encoder zero. Rotation is continuous: the turret always takes the shortest path and has no cable limits. If counterclockwise rotation reads negative, set `Turret.ENCODER_REVERSED` to true.
+The turret is the goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by two continuous-rotation servos and measured by a REV Through Bore Encoder V2 mounted on one servo's output shaft. Both servos are mounted on the same side, facing the same way, so their direction flags must always match. In Main TeleOp the turret aims continuously from `follower.pose()` every loop, so it tracks while the chassis moves, and picks the top or bottom hive side from the robot's Y position (`Turret.SIDE_SWITCH_Y_INCHES` with a small hysteresis band). All eight motor ports are in use, so the encoder has no port of its own: its quadrature cable plugs into the encoder socket of the `intake` motor port (that motor does not use its own encoder) and the code reads the count through that motor (`Turret.ENCODER_PORT`). If the cable is in a different motor's encoder socket, put that motor's config name there; never use the transfer or outtake ports. The encoder is relative, so "straight forward" has to be recorded once. In a match that happens in autonomous: point the turret straight forward before pressing Play on the autonomous, and its encoder count at that moment is saved for TeleOp, which keeps that zero even if the turret moved during autonomous. If TeleOp is started on its own, the turret is zeroed at Init instead: it must point straight forward then, or press gamepad 2 Y on the init screen once it does. It is never re-zeroed on Play, so a turret nudged after Init is still measured correctly. `Turret.ENCODER_TO_TURRET_RATIO` converts servo-shaft turns to turret turns (1 / 2.75, so one full turret turn is 22528 ticks), and `Turret.ENCODER_REVERSED` flips the sign if turning the turret counterclockwise makes `Turret measuredAngleDeg` go down. Autonomous does not drive the turret; it only records the zero. The pose the turret aims from comes from the last autonomous (both autos save it) or the default start pose, and is shown on the init screen.
+
+**After autonomous.** Both autos are annotated with `preselectTeleOp`, so when an autonomous ends the Driver Station switches to the TeleOp by itself and a driver only has to press Init and Play (code cannot press those). Check this once on your own Driver Station: run an autonomous, let it end, and confirm the TeleOp is selected. Which TeleOp it switches to is one line: `RobotConstants.OpModeNames.TELEOP_AFTER_AUTO`. Every OpMode needs its own name for this to work, which is why the two autos are called "AutoPath Bottom" and "AutoPath Top".
 
 Stick signs: `forward = -left_y`, `strafe = -left_x`, `turn = -right_x`.
 
@@ -204,9 +209,9 @@ Docs: https://pedropathing.com/docs/pathing/tuning/foresight
 - [ ] **Tests → Hold** (resists being pushed)
 - [ ] **Tests → Line** (forward and back on tape)
 - [ ] **Tests → Curve** if you will use curves
-- [ ] `Main TeleOp`: robot-centric, field-centric, heading reset
+- [ ] `Main TeleOp`: robot-centric drive, slow mode, and the start pose on the init screen is right
 - [ ] Measure a real start pose (inches + heading)
-- [ ] Replace `RobotConstants.Field.HOME_*` if you use **Y**
+- [ ] Replace `RobotConstants.Field.START_POSE` / `OPPOSE_POSE` with measured poses before using gamepad 1 **X** / **B**
 - [ ] Confirm intake direction on real game pieces
 
 ---

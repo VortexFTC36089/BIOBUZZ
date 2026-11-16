@@ -21,7 +21,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "AutoPath", group = "Autonomous")
+@Autonomous(name = RobotConstants.OpModeNames.AUTO_TOP, group = "Autonomous",
+        preselectTeleOp = RobotConstants.OpModeNames.TELEOP_AFTER_AUTO)
 public class SecondAuto extends LinearOpMode {
 
     private Follower follower;
@@ -90,16 +91,44 @@ public class SecondAuto extends LinearOpMode {
         follower.update();
         // Hand-off to TeleOp starts at the auto start pose, in case auto is
         // stopped before it ever moves.
-        PoseStorage.lastAutoPose = follower.pose();
+        PoseStorage.lastAutoPose = start;
 
-        waitForStart();
+        // Turret hand-off to TeleOp. While waiting for Play, keep recording the
+        // turret encoder count as "turret straight forward", so the zero is taken
+        // at the moment Play is pressed. The turret is not driven in autonomous,
+        // but the hub keeps counting, so TeleOp restores this zero and knows where
+        // the turret really points even if it moved during autonomous.
+        while (opModeInInit()) {
+            int turretTicks = TurretSubsystem.readEncoderTicks(hardwareMap);
+            if (isStopRequested()) {
+                // Stop interrupts the hub read and the SDK then returns 0 instead of
+                // the real count. Keep the last good count.
+                break;
+            }
+            PoseStorage.lastAutoTurretZeroTicks = turretTicks;
+
+            telemetry.addLine("AutoPath Top ready");
+            telemetry.addLine("Point the turret STRAIGHT FORWARD now. Its zero is taken when you press Play.");
+            telemetry.addData("Turret encoderTicks (live)", turretTicks);
+            telemetry.addData("TeleOp after this auto", RobotConstants.OpModeNames.TELEOP_AFTER_AUTO);
+            telemetry.update();
+            sleep(20);
+        }
+        if (isStopRequested()) {
+            return;
+        }
         schedule(autoRoutine());
 
         while (opModeIsActive()) {
             follower.update();
             // Save the latest pose every loop so TeleOp starts from wherever
             // autonomous ended, even if it is stopped early or times out.
-            PoseStorage.lastAutoPose = follower.pose();
+            // A Stop (button or the 30 second timer) interrupts this thread, and the
+            // Pinpoint read can then come back as all zeros. Do not let that
+            // overwrite the last good pose.
+            if (!isStopRequested()) {
+                PoseStorage.lastAutoPose = follower.pose();
+            }
             Scheduler.execute();
             // Apply whatever the commands requested this loop to the hardware.
             intake.update();
