@@ -69,7 +69,7 @@ TeamCode/src/main/java/org/firstinspires/ftc/teamcode/
 ├── MainTeleOp.java              Match drive + intake/transfer/outtake/servo/turret
 ├── MainAuto.java                Autonomous from the (56, 8) start (Pedro + Ivy)
 ├── SecondAuto.java              Autonomous from the (56, 136) start: shoot, then path
-├── PoseStorage.java             Hands the last auto / TeleOp pose and turret zero to TeleOp
+├── RobotBlackboard.java         Keys and typed accessors for shared OpMode blackboard state
 ├── IntakeSubsystem.java         Intake + transfer motors
 ├── OuttakeSubsystem.java        Dual velocity-controlled outtake motors
 ├── TurretSubsystem.java         Two-servo turret aimed from the Pedro pose

@@ -108,8 +108,9 @@ public class MainTeleOp extends OpMode {
         // Start from where autonomous ended if one just ran, otherwise from the
         // default start pose. The driver can change this on the init screen
         // (see init_loop) because the turret aims from this pose all match.
-        if (PoseStorage.lastAutoPose != null) {
-            applyStartPose(PoseStorage.lastAutoPose, "FROM AUTO");
+        Pose autoPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE);
+        if (autoPose != null) {
+            applyStartPose(autoPose, "FROM AUTO");
         } else {
             // No unused autonomous pose: none has run, or a TeleOp already used it.
             applyStartPose(RobotConstants.Field.START_POSE, "DEFAULT START (no saved auto pose)");
@@ -149,8 +150,11 @@ public class MainTeleOp extends OpMode {
         // Coming straight from autonomous: keep the turret zero that autonomous
         // recorded instead of the one just taken, because the turret may have
         // moved during autonomous and nobody may touch the robot in between.
-        if (PoseStorage.lastAutoPose != null) {
-            restoreTurretZero(PoseStorage.lastAutoTurretZeroTicks, "the last autonomous");
+        if (autoPose != null) {
+            restoreTurretZero(
+                    RobotBlackboard.getInteger(blackboard, RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS),
+                    "the last autonomous"
+            );
         }
 
         drivingToHome = false;
@@ -184,17 +188,25 @@ public class MainTeleOp extends OpMode {
             applyStartPose(RobotConstants.Field.START_POSE, "DEFAULT START (driver chose)");
             zeroTurretHere();
         }
-        if (poseAutoToggle.update(gamepad1.dpad_up) && PoseStorage.lastAutoPose != null) {
-            applyStartPose(PoseStorage.lastAutoPose, "FROM AUTO");
-            restoreTurretZero(PoseStorage.lastAutoTurretZeroTicks, "the last autonomous");
+        Pose autoPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE);
+        if (poseAutoToggle.update(gamepad1.dpad_up) && autoPose != null) {
+            applyStartPose(autoPose, "FROM AUTO");
+            restoreTurretZero(
+                    RobotBlackboard.getInteger(blackboard, RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS),
+                    "the last autonomous"
+            );
         }
-        if (poseResumeToggle.update(gamepad1.dpad_right) && PoseStorage.lastTeleOpPose != null) {
-            applyStartPose(PoseStorage.lastTeleOpPose, "LAST TELEOP (driver chose)");
+        Pose teleOpPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE);
+        if (poseResumeToggle.update(gamepad1.dpad_right) && teleOpPose != null) {
+            applyStartPose(teleOpPose, "LAST TELEOP (driver chose)");
             // In a mid-match restart nobody can straighten the turret by hand, so
             // it is probably NOT pointing forward now. The hub kept counting while
             // TeleOp was stopped, so bring back the zero that TeleOp was using.
             // Gamepad 2 Y still overrides it.
-            restoreTurretZero(PoseStorage.lastTeleOpTurretZeroTicks, "the last TeleOp");
+            restoreTurretZero(
+                    RobotBlackboard.getInteger(blackboard, RobotBlackboard.LAST_TELEOP_TURRET_ZERO_TICKS),
+                    "the last TeleOp"
+            );
         }
 
         if (turret != null) {
@@ -253,8 +265,10 @@ public class MainTeleOp extends OpMode {
                 startPose.x(), startPose.y(), Math.toDegrees(startPose.heading()));
         telemetry.addLine("  Is the robot REALLY there? If not: G1 Dpad Left = default start"
                 + (turret != null ? " + zero turret HERE" : "")
-                + (PoseStorage.lastAutoPose != null ? "  |  Dpad Up = auto pose + turret zero" : "")
-                + (PoseStorage.lastTeleOpPose != null ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
+                + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE) != null
+                        ? "  |  Dpad Up = auto pose + turret zero" : "")
+                + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE) != null
+                        ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
         if (turret != null) {
             telemetry.addData("Turret measuredAngleDeg (live)", "%.1f", turret.getCurrentAngleDegrees());
             telemetry.addData("Turret encoderTicks (live)", turret.getEncoderTicks());
@@ -297,12 +311,15 @@ public class MainTeleOp extends OpMode {
         lastLoopNanos = System.nanoTime();
         // The autonomous pose has now been used. Clear it so a later practice
         // TeleOp does not silently start from an old autonomous end pose.
-        PoseStorage.lastAutoPose = null;
-        PoseStorage.lastAutoTurretZeroTicks = null;
+        blackboard.remove(RobotBlackboard.LAST_AUTO_POSE);
+        blackboard.remove(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS);
         // Remember the turret zero this TeleOp runs with, next to the TeleOp pose,
         // so a restart in the middle of a match can restore both.
         if (turret != null) {
-            PoseStorage.lastTeleOpTurretZeroTicks = turret.getZeroOffsetTicks();
+            blackboard.put(
+                    RobotBlackboard.LAST_TELEOP_TURRET_ZERO_TICKS,
+                    turret.getZeroOffsetTicks()
+            );
         }
     }
 
@@ -418,7 +435,7 @@ public class MainTeleOp extends OpMode {
         follower.update();
         // Remember where we are, so a TeleOp restart in the middle of a match
         // can resume from here (Gamepad 1 Dpad Right on the init screen).
-        PoseStorage.lastTeleOpPose = follower.pose();
+        blackboard.put(RobotBlackboard.LAST_TELEOP_POSE, follower.pose());
         // Aim with the freshest localizer pose, every loop, no blocking.
         if (turret != null) {
             turret.update(follower.pose());

@@ -44,7 +44,7 @@ public class MainAuto extends LinearOpMode {
         follower.update();
         // Hand-off to TeleOp starts at the auto start pose, in case auto is
         // stopped before it ever moves.
-        PoseStorage.lastAutoPose = start;
+        blackboard.put(RobotBlackboard.LAST_AUTO_POSE, start);
 
         // Turret hand-off to TeleOp. While waiting for Play, keep recording the
         // turret encoder count as "turret straight forward", so the zero is taken
@@ -58,7 +58,7 @@ public class MainAuto extends LinearOpMode {
                 // the real count. Keep the last good count.
                 break;
             }
-            PoseStorage.lastAutoTurretZeroTicks = turretTicks;
+            blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turretTicks);
 
             telemetry.addLine("AutoPath Bottom ready");
             telemetry.addLine("Point the turret STRAIGHT FORWARD now. Its zero is taken when you press Play.");
@@ -81,7 +81,7 @@ public class MainAuto extends LinearOpMode {
             // Pinpoint read can then come back as all zeros. Do not let that
             // overwrite the last good pose.
             if (!isStopRequested()) {
-                PoseStorage.lastAutoPose = follower.pose();
+                blackboard.put(RobotBlackboard.LAST_AUTO_POSE, follower.pose());
             }
             Scheduler.execute();
 
