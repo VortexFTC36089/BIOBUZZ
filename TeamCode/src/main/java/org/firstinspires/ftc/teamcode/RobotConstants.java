@@ -152,7 +152,7 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static final double TRANSFER_TARGET_RPM = 3050.0;
+        public static final double TRANSFER_TARGET_RPM = 3000.0; // Actually running at 2000 RPM due to Gear Reduction.
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
@@ -168,14 +168,14 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 0.8;
+        public static final double INTAKE_POWER = 0.37;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -0.80;
+        public static final double OUTTAKE_POWER = -0.17;
 
         /**
          * Power used on the transfer motor while pulling game elements in
