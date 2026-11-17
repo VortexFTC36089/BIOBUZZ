@@ -287,7 +287,7 @@ public final class RobotConstants {
          * mode, power or direction.
          */
         // TODO(team): confirm the encoder cable is in the intake motor's encoder socket
-        public static final String ENCODER_PORT = Intake.MOTOR;
+        public static final String ENCODER_PORT = Drive.FRONT_RIGHT;
 
         /** Quadrature counts per revolution of the REV Through Bore Encoder V2 (2048 CPR x 4). */
         public static final double ENCODER_TICKS_PER_REV = 8192.0;
