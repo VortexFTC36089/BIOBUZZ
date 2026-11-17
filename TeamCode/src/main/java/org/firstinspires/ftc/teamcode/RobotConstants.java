@@ -152,14 +152,14 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static final double TRANSFER_TARGET_RPM = 5000.0;
+        public static final double TRANSFER_TARGET_RPM = 3050.0;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
          * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
          */
         // TODO(team): tune transfer velocity PIDF gains on the robot
-        public static final double TRANSFER_KP = 50.0;
+        public static final double TRANSFER_KP = 40.0;
         public static final double TRANSFER_KI = 0.0;
         public static final double TRANSFER_KD = 0.5;
         public static final double TRANSFER_KF = 10.0;
@@ -168,7 +168,7 @@ public final class RobotConstants {
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 1;
+        public static final double INTAKE_POWER = 0.8;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
@@ -220,7 +220,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2450;
+        public static final double TARGET_RPM = 2130;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -237,14 +237,14 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 173.0;
+        public static final double LEFT_KP = 120.0;
         public static final double LEFT_KI = 0.0;
-        public static final double LEFT_KD = 1.0;
+        public static final double LEFT_KD = 2.0;
         public static final double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 173.0;
+        public static final double RIGHT_KP = 120.0;
         public static final double RIGHT_KI = 0.0;
-        public static final double RIGHT_KD = 1.0;
+        public static final double RIGHT_KD = 2.0;
         public static final double RIGHT_KF = 10.0;
 
         /**
@@ -588,7 +588,7 @@ public final class RobotConstants {
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 0500.0;
+        public static final double FEED_TIME_MS = 0250.0;
     }
 
     /**
