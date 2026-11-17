@@ -400,7 +400,7 @@ public final class RobotConstants {
          */
         // TODO(team): measure turret pivot offset from robot center in inches
         public static final double OFFSET_X_INCHES = 0.0;
-        public static final double OFFSET_Y_INCHES = 0.0;
+        public static final double OFFSET_Y_INCHES = 2.0;
 
         /**
          * The two hive sides in Pedro Pathing inches. The turret aims at the TOP side when the
