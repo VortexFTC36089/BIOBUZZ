@@ -20,6 +20,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
  *   <li>Dpad Up / Down: raise / lower that gain by the step</li>
  *   <li>B / X: step x10 / step ÷10</li>
  *   <li>Right / Left bumper: target RPM + / - {@link #RPM_STEP}</li>
+ *   <li>Gamepad 2 A: set target RPM to {@link #LOW_TARGET_RPM}</li>
  *   <li>Start / Back: next / previous motor in {@link #MOTOR_NAMES}</li>
  *   <li>Y: reset the selected motor's gains to its starting values</li>
  * </ul>
@@ -38,8 +39,7 @@ public class MotorPidfFinder extends OpMode {
     /** Motors that can be tuned. Only the selected one runs. */
     private static final String[] MOTOR_NAMES = {
             RobotConstants.Outtake.LEFT_MOTOR,
-            RobotConstants.Outtake.RIGHT_MOTOR,
-            RobotConstants.Intake.TRANSFER_MOTOR
+            RobotConstants.Outtake.RIGHT_MOTOR
     };
 
     /** Whether each motor in {@link #MOTOR_NAMES} is reversed (same order). */
@@ -49,6 +49,7 @@ public class MotorPidfFinder extends OpMode {
     private static final double TICKS_PER_REV = RobotConstants.Outtake.TICKS_PER_REV;
 
     private static final double START_TARGET_RPM = RobotConstants.Outtake.TARGET_RPM;
+    private static final double LOW_TARGET_RPM = 1000.0;
     private static final double RPM_STEP = 100.0;
 
     /**
@@ -61,12 +62,6 @@ public class MotorPidfFinder extends OpMode {
                     RobotConstants.Outtake.LEFT_KI,
                     RobotConstants.Outtake.LEFT_KD,
                     RobotConstants.Outtake.LEFT_KF
-            },
-            {
-                    RobotConstants.Outtake.RIGHT_KP,
-                    RobotConstants.Outtake.RIGHT_KI,
-                    RobotConstants.Outtake.RIGHT_KD,
-                    RobotConstants.Outtake.RIGHT_KF
             },
             {
                     RobotConstants.Outtake.RIGHT_KP,
@@ -102,6 +97,7 @@ public class MotorPidfFinder extends OpMode {
     private final ToggleButton stepDown = new ToggleButton();
     private final ToggleButton rpmUp = new ToggleButton();
     private final ToggleButton rpmDown = new ToggleButton();
+    private final ToggleButton lowRpm = new ToggleButton();
     private final ToggleButton nextMotor = new ToggleButton();
     private final ToggleButton prevMotor = new ToggleButton();
     private final ToggleButton resetGains = new ToggleButton();
@@ -130,6 +126,7 @@ public class MotorPidfFinder extends OpMode {
         telemetry.addLine("Motor PIDF Finder ready");
         telemetry.addLine("A = run/stop  |  Dpad L/R = pick gain  |  Dpad U/D = change gain");
         telemetry.addLine("B / X = step x10 / ÷10  |  RB / LB = target RPM +/-");
+        telemetry.addLine("G2 A = set target RPM to 1000");
         telemetry.addLine("Start / Back = next / prev motor  |  Y = reset gains");
         telemetry.update();
     }
@@ -186,6 +183,9 @@ public class MotorPidfFinder extends OpMode {
         }
         if (rpmDown.update(gamepad1.left_bumper)) {
             targetRpm = Math.max(0.0, targetRpm - RPM_STEP);
+        }
+        if (lowRpm.update(gamepad2.a)) {
+            targetRpm = LOW_TARGET_RPM;
         }
         if (runToggle.update(gamepad1.a)) {
             running = !running;
