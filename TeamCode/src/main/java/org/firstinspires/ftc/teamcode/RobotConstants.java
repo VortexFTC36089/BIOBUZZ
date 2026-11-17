@@ -586,9 +586,95 @@ public final class RobotConstants {
         // TODO(team): tune on the robot
         public static final double GATE_OPEN_WAIT_MS = 300.0;
 
-        /** How long the intake and transfer run to feed every ball into the flywheels. */
+        /**
+         * How long the intake and transfer run to feed every ball into the flywheels.
+         * Only time with the feed actually running counts: pauses that
+         * {@link ShotFeeder} adds while the wheels recover are not included.
+         */
         // TODO(team): tune on the robot (long enough for all balls to leave)
         public static final double FEED_TIME_MS = 0500.0;
+    }
+
+    /**
+     * Rapid-fire feeding: how balls are pushed into the flywheels during a shot so that
+     * every ball in a burst meets the wheels at the same speed and flies the same arc.
+     * Used by {@link ShotFeeder} in Main TeleOp and in autonomous.
+     *
+     * <p>How it works: when a burst starts, the speed of each flywheel is remembered. The
+     * intake and transfer then feed ONLY while both wheels are still within
+     * {@link #RPM_TOLERANCE} of that speed. Each ball slows the wheels; when they drop out
+     * of the band the feed pauses, and it resumes as soon as they have recovered. With
+     * heavy flywheels the feed never pauses (full rapid fire); with light ones it pauses
+     * for a moment between balls.
+     *
+     * <p>Tune with the "Burst ..." lines on the Driver Station after a shot.
+     */
+    public static final class ShotFeed {
+        /**
+         * Master switch. {@code false} turns the pausing off completely: the feed then
+         * runs without stopping for {@link Auto#FEED_TIME_MS}, exactly as it did before
+         * this was added. Use that if the new behaviour ever causes trouble at an event.
+         */
+        public static final boolean GATING_ENABLED = true;
+
+        /**
+         * How far (RPM) a flywheel may be from the speed it had when the burst started
+         * before the feed pauses. Smaller = balls land closer together, but more pausing.
+         *
+         * <p>Do not go below about 50. The hub reports flywheel speed in coarse steps
+         * (about 43 RPM for a 28-tick motor), so a tighter band pauses on measurement
+         * noise alone.
+         */
+        // TODO(team): tune on the robot
+        public static final double RPM_TOLERANCE = 60.0;
+
+        /**
+         * Loops in a row both flywheels must be at speed (within
+         * {@link Outtake#RPM_TOLERANCE} of the target) before a burst may start, so one
+         * lucky reading while still spinning up does not start it.
+         */
+        public static final int READY_LOOPS = 3;
+
+        /**
+         * Longest single pause (milliseconds). If the wheels have not recovered by then,
+         * the feeder stops waiting and feeds the rest of the burst without pauses, so a
+         * shot can never get stuck. If the Driver Station shows "GAVE UP WAITING" often,
+         * the wheels need more than this to recover: raise it, or add flywheel weight.
+         */
+        // TODO(team): tune on the robot
+        public static final double MAX_PAUSE_MS = 500.0;
+
+        /** Hard limit (milliseconds) on a whole burst, pauses included. */
+        public static final double MAX_TOTAL_MS = 4000.0;
+
+        /**
+         * Intake power while feeding a shot. Same as normal intaking for now. The intake
+         * is not speed-controlled, so it slows as the battery drops.
+         */
+        // TODO(team): tune on the robot
+        public static final double INTAKE_POWER = Intake.INTAKE_POWER;
+
+        /**
+         * Transfer speed (RPM) while feeding a shot. Same as normal transferring for now.
+         *
+         * <p>This sets the time between balls: time between balls = ball width / feed
+         * speed. Slower = more time for the wheels to recover between balls. It must be a
+         * speed the motor can really hold under load: compare it with "Transfer RPM while
+         * feeding" on the Driver Station. If the measured number is well below this one,
+         * the motor is flat out and the ball spacing changes with the battery, so lower
+         * this until the two agree. Feeding slower moves the balls less far in the same
+         * time, so raise {@link Auto#FEED_TIME_MS} to match.
+         */
+        // TODO(team): tune on the robot
+        public static final double TRANSFER_RPM = Intake.TRANSFER_TARGET_RPM;
+
+        /**
+         * Extra flywheel target speed (RPM) while the feed is running, so the motors are
+         * already pushing harder when a ball arrives instead of reacting after the speed
+         * has dropped. 0 = off. Try small steps (20 to 50) only after everything else is
+         * tuned: too much makes the first ball go long.
+         */
+        public static final double BOOST_RPM = 0.0;
     }
 
     /**

@@ -46,6 +46,11 @@ public class IntakeSubsystem {
     private final DcMotorEx transferMotor;
     private IntakeState state;
     private TransferState transferState;
+    /**
+     * True while the motors are feeding a shot (set by {@link #feedShot()}): they then run
+     * at the {@link RobotConstants.ShotFeed} speeds instead of the normal intaking speeds.
+     */
+    private boolean shotFeed;
 
     /**
      * Finds the intake and transfer motors and puts both in a known-safe configuration.
@@ -97,6 +102,29 @@ public class IntakeSubsystem {
      */
     public void intake() {
         state = IntakeState.INTAKING;
+        shotFeed = false;
+    }
+
+    /**
+     * Runs the intake AND the transfer inward to feed balls into the flywheels, at the
+     * shot-feed speeds ({@link RobotConstants.ShotFeed#INTAKE_POWER} and
+     * {@link RobotConstants.ShotFeed#TRANSFER_RPM}). Used by {@link ShotFeeder}.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void feedShot() {
+        state = IntakeState.INTAKING;
+        transferState = TransferState.TRANSFERRING;
+        shotFeed = true;
+    }
+
+    /**
+     * Reads the transfer motor's speed from the hub right now, in RPM. This costs one hub
+     * read, so call it only when the number is needed (the shot feeder does, while it is
+     * feeding).
+     */
+    public double readTransferRpm() {
+        return transferMotor.getVelocity() * 60.0 / RobotConstants.Intake.TRANSFER_TICKS_PER_REV;
     }
 
     /**
@@ -107,6 +135,7 @@ public class IntakeSubsystem {
      */
     public void reverse() {
         state = IntakeState.REVERSING;
+        shotFeed = false;
     }
 
     /**
@@ -116,6 +145,7 @@ public class IntakeSubsystem {
      */
     public void stopIntake() {
         state = IntakeState.OFF;
+        shotFeed = false;
     }
 
     /**
@@ -138,6 +168,7 @@ public class IntakeSubsystem {
      */
     public void transfer() {
         transferState = TransferState.TRANSFERRING;
+        shotFeed = false;
     }
 
     /**
@@ -147,6 +178,7 @@ public class IntakeSubsystem {
      */
     public void reverseTransfer() {
         transferState = TransferState.REVERSING;
+        shotFeed = false;
     }
 
     /**
@@ -156,6 +188,7 @@ public class IntakeSubsystem {
      */
     public void stopTransfer() {
         transferState = TransferState.OFF;
+        shotFeed = false;
     }
 
     /**
@@ -167,6 +200,7 @@ public class IntakeSubsystem {
     public void stop() {
         state = IntakeState.OFF;
         transferState = TransferState.OFF;
+        shotFeed = false;
     }
 
     /**
@@ -179,7 +213,9 @@ public class IntakeSubsystem {
     public void update() {
         switch (state) {
             case INTAKING:
-                motor.setPower(RobotConstants.Intake.INTAKE_POWER);
+                motor.setPower(shotFeed
+                        ? RobotConstants.ShotFeed.INTAKE_POWER
+                        : RobotConstants.Intake.INTAKE_POWER);
                 break;
             case REVERSING:
                 motor.setPower(RobotConstants.Intake.OUTTAKE_POWER);
@@ -192,7 +228,10 @@ public class IntakeSubsystem {
 
         switch (transferState) {
             case TRANSFERRING:
-                double transferTicksPerSec = (RobotConstants.Intake.TRANSFER_TARGET_RPM
+                double transferRpm = shotFeed
+                        ? RobotConstants.ShotFeed.TRANSFER_RPM
+                        : RobotConstants.Intake.TRANSFER_TARGET_RPM;
+                double transferTicksPerSec = (transferRpm
                         * RobotConstants.Intake.TRANSFER_TICKS_PER_REV) / 60.0;
                 transferMotor.setVelocity(transferTicksPerSec);
                 break;

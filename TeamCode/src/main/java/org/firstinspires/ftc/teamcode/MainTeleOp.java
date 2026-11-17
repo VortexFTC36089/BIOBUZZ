@@ -58,6 +58,7 @@ public class MainTeleOp extends OpMode {
     private TurretSubsystem turret;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
+    private ShotFeeder shotFeeder;
     private Servo servo;
 
     private final ToggleButton fieldCentricToggle = new ToggleButton();
@@ -121,6 +122,7 @@ public class MainTeleOp extends OpMode {
 
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
+        shotFeeder = new ShotFeeder(intake, outtake);
 
         // Two-position servo, toggled with Gamepad 1 A. Start at POSITION_A.
         // Skipped entirely while FLOWER_SERVO_ENABLED is false.
@@ -266,15 +268,15 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("  Is the robot REALLY there? If not: G1 Dpad Left = default start"
                 + (turret != null ? " + zero turret HERE" : "")
                 + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE) != null
-                        ? "  |  Dpad Up = auto pose + turret zero" : "")
+                ? "  |  Dpad Up = auto pose + turret zero" : "")
                 + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE) != null
-                        ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
+                ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
         if (turret != null) {
             telemetry.addData("Turret measuredAngleDeg (live)", "%.1f", turret.getCurrentAngleDegrees());
             telemetry.addData("Turret encoderTicks (live)", turret.getEncoderTicks());
             telemetry.addLine(turretZeroKeptFrom != null
                     ? "  Turret zero KEPT from " + turretZeroKeptFrom
-                            + ": a non-zero angle is correct. G2 Y = zero it here instead."
+                    + ": a non-zero angle is correct. G2 Y = zero it here instead."
                     : "  Turret must point straight forward and read 0.0. G2 Y = zero it here.");
             telemetry.addLine("  Check: turn it LEFT by hand (counterclockwise from above), angle must go UP.");
             telemetry.addLine("  The turret starts moving by itself when you press Play. Hands clear.");
@@ -404,8 +406,9 @@ public class MainTeleOp extends OpMode {
 
         // ---- Shoot balls (Gamepad 2 RT) ----
         // Ivy sequence built in shootBalls() below (it also waits for the turret
-        // to aim; SecondAuto has its own version). Rising edge starts it; it runs
-        // to completion. Face buttons and LT are ignored while it is active.
+        // to aim; SecondAuto has its own version, and both feed through
+        // ShotFeeder). Rising edge starts it; it runs to completion. Face buttons
+        // and LT are ignored while it is active.
         boolean shootPressed = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
         boolean shooting = isShootActive();
         if (shootPressed && !wasShootTrigger && !shooting) {
@@ -571,13 +574,17 @@ public class MainTeleOp extends OpMode {
      * intake and transfer, then stop the feed and close the gate. The
      * flywheels are left running.
      *
-     * <p>Both waits have a timeout, so a slow flywheel or a turret that never
+     * <p>The feed is run by {@link ShotFeeder}: it pauses whenever a ball has
+     * slowed the flywheels and resumes once they have recovered, so every ball
+     * in the burst leaves at the same speed (see {@link RobotConstants.ShotFeed}).
+     *
+     * <p>Every wait has a timeout, so a slow flywheel or a turret that never
      * settles delays the shot but cannot block it forever.
      */
     private Command shootBalls() {
         return sequential(
                 race(
-                        waitUntil(() -> outtake.atSpeed()),
+                        waitUntil(() -> shotFeeder.readyToStart()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
                 race(
@@ -586,11 +593,11 @@ public class MainTeleOp extends OpMode {
                 ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
-                instant(() -> {
-                    intake.intake();
-                    intake.transfer();
-                }),
-                waitMs(RobotConstants.Auto.FEED_TIME_MS),
+                Command.build()
+                        .setStart(() -> shotFeeder.begin())
+                        .setExecute(() -> shotFeeder.step())
+                        .setDone(() -> shotFeeder.isFinished())
+                        .setEnd(endCondition -> shotFeeder.end()),
                 instant(() -> {
                     intake.stop();
                     outtake.setGateOpen(false);
@@ -669,6 +676,7 @@ public class MainTeleOp extends OpMode {
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
         telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
         telemetry.addData("Shoot balls", isShootActive() ? "RUNNING" : "OFF");
+        shotFeeder.addTelemetry(telemetry);
         telemetry.addData("Servo", servo == null
                 ? "DISABLED"
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));

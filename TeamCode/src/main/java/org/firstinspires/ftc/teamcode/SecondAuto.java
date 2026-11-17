@@ -28,6 +28,7 @@ public class SecondAuto extends LinearOpMode {
     private Follower follower;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
+    private ShotFeeder shotFeeder;
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
@@ -53,7 +54,9 @@ public class SecondAuto extends LinearOpMode {
      *       flywheel cannot stall the whole autonomous),</li>
      *   <li>opens the gate and waits for the servo to move,</li>
      *   <li>runs the intake and transfer inward for
-     *       {@link RobotConstants.Auto#FEED_TIME_MS} to feed the balls,</li>
+     *       {@link RobotConstants.Auto#FEED_TIME_MS} to feed the balls, through
+     *       {@link ShotFeeder}, which pauses the feed whenever a ball has slowed
+     *       the flywheels and resumes once they have recovered,</li>
      *   <li>stops the intake, transfer and flywheels and closes the gate.</li>
      * </ol>
      *
@@ -64,16 +67,16 @@ public class SecondAuto extends LinearOpMode {
         return sequential(
                 instant(() -> outtake.outtake()),
                 race(
-                        waitUntil(() -> outtake.atSpeed()),
+                        waitUntil(() -> shotFeeder.readyToStart()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
-                instant(() -> {
-                    intake.intake();
-                    intake.transfer();
-                }),
-                waitMs(RobotConstants.Auto.FEED_TIME_MS),
+                Command.build()
+                        .setStart(() -> shotFeeder.begin())
+                        .setExecute(() -> shotFeeder.step())
+                        .setDone(() -> shotFeeder.isFinished())
+                        .setEnd(endCondition -> shotFeeder.end()),
                 instant(() -> {
                     intake.stop();
                     outtake.stop();
@@ -86,6 +89,7 @@ public class SecondAuto extends LinearOpMode {
         Scheduler.reset();
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
+        shotFeeder = new ShotFeeder(intake, outtake);
         follower = Constants.create(hardwareMap);
         follower.setPose(start);
         follower.update();
@@ -140,6 +144,7 @@ public class SecondAuto extends LinearOpMode {
             telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (atSpeed=%b)",
                     outtake.getLeftRpm(), outtake.getRightRpm(), outtake.atSpeed());
             telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
+            shotFeeder.addTelemetry(telemetry);
 
             if (follower.currentPath() != null) {
                 telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());

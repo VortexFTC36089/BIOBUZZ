@@ -52,6 +52,18 @@ public class OuttakeSubsystem {
     private double measuredLeftRpm;
     private double measuredRightRpm;
 
+    // ---- Rapid-fire feeding support (see ShotFeeder) ----
+    /** How many of the most recent RPM samples are averaged for the burst start speed. */
+    private static final int RECENT_SAMPLES = Math.max(1, RobotConstants.ShotFeed.READY_LOOPS);
+    private final double[] recentLeftRpm = new double[RECENT_SAMPLES];
+    private final double[] recentRightRpm = new double[RECENT_SAMPLES];
+    private int recentCount;
+    private int recentIndex;
+    /** Loops in a row that both motors have been at speed. */
+    private int atSpeedLoops;
+    /** While true, the commanded speed is raised by {@link RobotConstants.ShotFeed#BOOST_RPM}. */
+    private boolean feedBoost;
+
     /**
      * Finds both outtake motors and puts them in a known-safe initial state
      * (stopped in velocity mode with PIDF gains applied).
@@ -156,7 +168,20 @@ public class OuttakeSubsystem {
         } else {
             targetRpm = 0.0;
             motorState = MotorState.OFF;
+            feedBoost = false;
         }
+    }
+
+    /**
+     * Turns the shot-feed boost on or off. While on, the motors are commanded
+     * {@link RobotConstants.ShotFeed#BOOST_RPM} above the target, so they are already
+     * pushing harder when a ball arrives. With BOOST_RPM = 0 this changes nothing.
+     * "At speed" is still judged against the normal target.
+     *
+     * <p>Takes effect on the next {@link #update()}.</p>
+     */
+    public void setFeedBoost(boolean on) {
+        feedBoost = on;
     }
 
     /**
@@ -198,10 +223,19 @@ public class OuttakeSubsystem {
             leftMotor.setPower(0.0);
             rightMotor.setPower(0.0);
             motorState = MotorState.OFF;
+            atSpeedLoops = 0;
+            recentCount = 0;
+            recentIndex = 0;
             return;
         }
 
-        double ticksPerSec = rpmToTicksPerSec(targetRpm);
+        // The shot-feed boost (0 unless tuned) is added to the command only; "at speed"
+        // below is still judged against the normal target.
+        double commandedRpm = targetRpm;
+        if (feedBoost) {
+            commandedRpm = Math.max(0.0, targetRpm + RobotConstants.ShotFeed.BOOST_RPM);
+        }
+        double ticksPerSec = rpmToTicksPerSec(commandedRpm);
         leftMotor.setVelocity(ticksPerSec);
         rightMotor.setVelocity(ticksPerSec);
 
@@ -209,6 +243,43 @@ public class OuttakeSubsystem {
         boolean leftOk = Math.abs(measuredLeftRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         boolean rightOk = Math.abs(measuredRightRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         motorState = (leftOk && rightOk) ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
+
+        // 4. Bookkeeping for rapid-fire feeding: how long we have been at speed, and the
+        //    last few samples (averaged to get a steady "start speed" for a burst).
+        atSpeedLoops = (motorState == MotorState.AT_SPEED) ? atSpeedLoops + 1 : 0;
+        recentLeftRpm[recentIndex] = measuredLeftRpm;
+        recentRightRpm[recentIndex] = measuredRightRpm;
+        recentIndex = (recentIndex + 1) % RECENT_SAMPLES;
+        recentCount = Math.min(recentCount + 1, RECENT_SAMPLES);
+    }
+
+    /**
+     * @return {@code true} if both motors have been at speed for at least
+     *         {@link RobotConstants.ShotFeed#READY_LOOPS} {@link #update()} calls in a row
+     */
+    public boolean isSteadyAtSpeed() {
+        return atSpeedLoops >= RobotConstants.ShotFeed.READY_LOOPS;
+    }
+
+    /** @return left motor RPM averaged over the last few {@link #update()} calls */
+    public double getRecentLeftRpm() {
+        return recentAverage(recentLeftRpm, measuredLeftRpm);
+    }
+
+    /** @return right motor RPM averaged over the last few {@link #update()} calls */
+    public double getRecentRightRpm() {
+        return recentAverage(recentRightRpm, measuredRightRpm);
+    }
+
+    private double recentAverage(double[] samples, double fallback) {
+        if (recentCount == 0) {
+            return fallback;
+        }
+        double sum = 0.0;
+        for (int i = 0; i < recentCount; i++) {
+            sum += samples[i];
+        }
+        return sum / recentCount;
     }
 
     /**
