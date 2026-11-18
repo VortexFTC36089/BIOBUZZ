@@ -189,11 +189,11 @@ public class MotorPidfFinder extends OpMode {
         if (lowRpm.update(gamepad2.a)) {
             targetRpm = LOW_TARGET_RPM;
         }
-        if (lowRpm.update(gamepad2.a)) {
-            targetRpm = LOW_TARGET_RPM;
-        }
-        if (lowRpm.update(gamepad1.y)) {
+        if (lowRpm.update(gamepad2.y)) {
             targetRpm = HIGH_TARGET_RPM;
+        }
+        if (runToggle.update(gamepad1.a)) {
+            running = !running;
         }
 
         // ---- Command the motor ----
