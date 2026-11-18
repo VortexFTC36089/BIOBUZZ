@@ -9,6 +9,7 @@ import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -67,7 +68,10 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton speedDownToggle = new ToggleButton();
     private final ToggleButton servoToggle = new ToggleButton();
     private final ToggleButton turretHiveToggle = new ToggleButton();
+    private final ToggleButton turretForwardToggle = new ToggleButton();
     private final ToggleButton turretHomeToggle = new ToggleButton();
+    /** True while Gamepad 2 Dpad Left/Right was jogging the turret on the last loop. */
+    private boolean turretJogging;
     private final ToggleButton turretZeroToggle = new ToggleButton();
     private final ToggleButton poseDefaultToggle = new ToggleButton();
     private final ToggleButton poseAutoToggle = new ToggleButton();
@@ -276,7 +280,9 @@ public class MainTeleOp extends OpMode {
                     ? "  Turret zero KEPT from " + turretZeroKeptFrom
                             + ": a non-zero angle is correct. G2 Y = zero it here instead."
                     : "  Turret must point straight forward and read 0.0. G2 Y = zero it here.");
-            telemetry.addLine("  Check: turn it LEFT by hand (counterclockwise from above), angle must go UP.");
+            telemetry.addLine("  Check 1: turn the TURRET LEFT by hand (counterclockwise from above), angle must go UP."
+                    + " If it goes DOWN, flip Turret.ENCODER_REVERSED.");
+            telemetry.addLine("  Check 2: turn the ROBOT LEFT by hand, Heading (deg) after Play must go UP.");
             telemetry.addLine("  The turret starts moving by itself when you press Play. Hands clear.");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
@@ -290,9 +296,15 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (waits for the turret to aim)");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (turret != null) {
-            telemetry.addLine("G2: Dpad Up = turret aims at the HIVE (top/bottom side picked automatically)");
-            telemetry.addLine("G2: LB = turret 90 deg left / straight forward (Dpad Up to aim again)");
+            telemetry.addLine("Turret aims at the HIVE by itself (top/bottom side picked automatically)");
+            telemetry.addLine("G2: Dpad Up = turret faces straight ahead; press again = back to the hive");
+            telemetry.addLine("G2: Dpad Down = back to the hive");
+            telemetry.addLine("G2: Dpad Left/Right HOLD = jog turret left/right, holds where released"
+                    + " (Dpad LEFT must turn it LEFT and make the angle go UP)");
+            telemetry.addLine("G2: LB = turret 90 deg left / straight forward (Dpad Down to aim again)");
         }
+        telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
+                ? "NOT CONNECTED (press Start+B on it)" : "connected");
         telemetry.update();
     }
 
@@ -620,18 +632,56 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Gamepad 2 turret controls. The hive is the only target. Dpad Up aims at
-     * it, with the top or bottom side picked automatically from the robot's Y
-     * position. LB stops tracking and turns the turret 90 degrees
-     * ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from straight forward;
-     * pressing LB again turns it back 90 degrees to straight forward. Dpad Up
-     * returns the turret to TRACKING.
+     * Gamepad 2 turret controls. The hive is the only field target.
+     *
+     * <p>The turret aims at the hive (TRACKING) from Play on, with the top or bottom
+     * side picked from the robot's Y position. Every button below that leaves the hive
+     * is undone by pressing it again or by Dpad Down.
+     *
+     * <ul>
+     *   <li>Dpad Up: face straight ahead in the robot's heading (HOME at 0 degrees).
+     *       Press again to go back to the hive.</li>
+     *   <li>Dpad Down: back to the hive. Also clears an encoder fault and retries.</li>
+     *   <li>Dpad Left / Right (hold): jog the turret left / right at
+     *       {@link RobotConstants.Turret#JOG_POWER}; on release it holds the angle it
+     *       stopped at. Dpad LEFT must turn the turret LEFT (counterclockwise from
+     *       above) and make measuredAngleDeg go UP: that is the direction check.</li>
+     *   <li>LB: stop tracking and turn 90 degrees
+     *       ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from straight forward;
+     *       press again to turn back to straight forward.</li>
+     * </ul>
      */
     private void updateTurretFromGamepad() {
-        if (turretHiveToggle.update(gamepad2.dpad_up)) {
-            turret.setAutoSelectSide(true);
-            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        if (turretForwardToggle.update(gamepad2.dpad_up)) {
+            boolean facingForward = turret.getMode() == TurretSubsystem.TurretMode.HOME
+                    && !turretAtSideAngle
+                    && turret.getHomeAngleRadians() == RobotConstants.Turret.HOME_ANGLE_RADIANS;
+            if (facingForward) {
+                aimTurretAtHive();
+            } else {
+                turret.setHomeAngle(RobotConstants.Turret.HOME_ANGLE_RADIANS);
+                turret.setMode(TurretSubsystem.TurretMode.HOME);
+                turretAtSideAngle = false;
+            }
         }
+        if (turretHiveToggle.update(gamepad2.dpad_down)) {
+            turret.clearFault();
+            aimTurretAtHive();
+        }
+
+        // Jog: held buttons, not edges. Left = +power (counterclockwise).
+        boolean jogLeft = gamepad2.dpad_left;
+        boolean jogRight = gamepad2.dpad_right;
+        if (jogLeft != jogRight) {
+            turret.jog(jogLeft ? RobotConstants.Turret.JOG_POWER : -RobotConstants.Turret.JOG_POWER);
+            turretJogging = true;
+            turretAtSideAngle = false;
+        } else if (turretJogging) {
+            // Both released (or both held): stop and hold the angle reached.
+            turret.holdCurrentAngle();
+            turretJogging = false;
+        }
+
         if (turretHomeToggle.update(gamepad2.left_bumper)) {
             // First press (or first press after tracking): turn to the side
             // angle. Next press: turn back to straight forward. Repeats.
@@ -642,6 +692,13 @@ public class MainTeleOp extends OpMode {
                     : RobotConstants.Turret.HOME_ANGLE_RADIANS);
             turret.setMode(TurretSubsystem.TurretMode.HOME);
         }
+    }
+
+    /** Puts the turret back on the hive, with automatic top/bottom side selection. */
+    private void aimTurretAtHive() {
+        turret.setAutoSelectSide(true);
+        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        turretAtSideAngle = false;
     }
 
     /**
@@ -672,6 +729,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Servo", servo == null
                 ? "DISABLED"
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
+        telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
+                ? "NOT CONNECTED (press Start+B on it)" : "connected");
         if (turret != null) {
             telemetry.addData("Turret mode", turret.getMode());
             telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());

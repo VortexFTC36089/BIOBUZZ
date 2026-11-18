@@ -317,8 +317,11 @@ public final class RobotConstants {
          * intake motor's own FORWARD/REVERSE setting does not matter: TurretSubsystem
          * cancels it out.
          */
-        // TODO(team): confirm on the robot
-        public static final boolean ENCODER_REVERSED = false;
+        // Set true on 2026-11-18: with false, the turret turned the SAME way as the chassis
+        // (a mirrored but stable loop), which means the encoder (on the pinion, which spins
+        // opposite to the turret ring) and both servos were all counted backwards. Verify
+        // on the init screen: turret turned LEFT by hand -> measuredAngleDeg must go UP.
+        public static final boolean ENCODER_REVERSED = true;
 
         /**
          * Flip so BOTH servos push the turret the same direction, and so positive power
@@ -331,9 +334,43 @@ public final class RobotConstants {
          * true). If the turret turns away from the target instead of toward it, flip
          * BOTH flags together, never just one.
          */
-        // TODO(team): confirm the turret turns toward the target on the robot
-        public static final boolean SERVO_LEFT_REVERSED = false;
-        public static final boolean SERVO_RIGHT_REVERSED = false;
+        // Set true on 2026-11-18 together with ENCODER_REVERSED (see above). If these are
+        // wrong the turret cannot run away any more: TurretSubsystem notices the encoder
+        // moving against the commanded power, flips the servo direction at run time and
+        // shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station. When that shows up,
+        // flip BOTH of these flags so the correction is not needed every match.
+        public static final boolean SERVO_LEFT_REVERSED = true;
+        public static final boolean SERVO_RIGHT_REVERSED = true;
+
+        /**
+         * Servo power used while the operator jogs the turret by hand with Gamepad 2
+         * Dpad Left / Right. Also the quickest direction check: Dpad LEFT must turn the
+         * turret LEFT (counterclockwise from above) and make measuredAngleDeg go UP.
+         */
+        public static final double JOG_POWER = 0.35;
+
+        /**
+         * Direction monitor: a commanded power at or above this (either sign) is expected
+         * to move the turret THAT way. If instead the encoder moves the other way by
+         * {@link #RUNAWAY_DEGREES}, the servo direction is wrong and the subsystem flips
+         * it at run time (see {@link #SERVO_LEFT_REVERSED}).
+         */
+        public static final double DIRECTION_MONITOR_MIN_POWER = 0.30;
+
+        /** See {@link #DIRECTION_MONITOR_MIN_POWER}. Big enough that a hand bump cannot trigger it. */
+        public static final double RUNAWAY_DEGREES = 10.0;
+
+        /**
+         * Encoder monitor: if the servos are commanded at or above this power for
+         * {@link #ENCODER_STALL_SECONDS} and the encoder count does not change AT ALL, the
+         * turret is not being measured (encoder cable out, wrong port) or cannot move. The
+         * servos are then stopped instead of spinning open-loop, and the Driver Station
+         * shows "TURRET ENCODER NOT COUNTING". Gamepad 2 Dpad Down clears it and retries.
+         */
+        public static final double ENCODER_STALL_MIN_POWER = 0.50;
+
+        /** See {@link #ENCODER_STALL_MIN_POWER}. */
+        public static final double ENCODER_STALL_SECONDS = 0.5;
 
         /**
          * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.

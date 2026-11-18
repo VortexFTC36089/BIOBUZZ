@@ -148,9 +148,28 @@ public class TurretSubsystem {
          * {@link #setHomeAngle(double)}).
          */
         HOME,
+        /** Operator is jogging the turret with a fixed power ({@link #jog(double)}). */
+        MANUAL,
         /** Servos commanded to zero power (stopped). */
         DISABLED
     }
+
+    /** Power applied while in {@link TurretMode#MANUAL} (+ = counterclockwise). */
+    private double manualPower = 0.0;
+
+    // ---- Direction / encoder monitor ----
+    // Runtime servo sign (+1 or -1). Flipped when the encoder moves AGAINST a sustained
+    // commanded power: that can only mean the servo direction flags are wrong. Keeps a
+    // wrong flag from turning the control loop into a runaway.
+    private int servoSign = 1;
+    private int autoFlipCount = 0;
+    /** True once the servos were driven hard for a while and the encoder never moved. */
+    private boolean encoderFault = false;
+    private double monitorPowerSign = 0.0;
+    private double monitorMinAbsPower = 0.0;
+    private double monitorStartAngleRad = 0.0;
+    private int monitorStartTicks = 0;
+    private final ElapsedTime monitorTimer = new ElapsedTime();
 
     private TurretMode mode = TurretMode.TRACKING;
 
@@ -324,9 +343,24 @@ public class TurretSubsystem {
      */
     public void update(Pose currentPose) {
         currentAngleRad = readAngleRadians();
+        monitorDirection();
 
-        if (!enabled || mode == TurretMode.DISABLED) {
+        if (!enabled || mode == TurretMode.DISABLED || encoderFault) {
             stop();
+            return;
+        }
+
+        if (mode == TurretMode.MANUAL) {
+            onTarget = false;
+            double power = manualPower;
+            if (useSoftLimits) {
+                if ((currentAngleRad >= maxAngleRadians && power > 0.0)
+                        || (currentAngleRad <= minAngleRadians && power < 0.0)) {
+                    power = 0.0;
+                }
+            }
+            setServoPower(Range.clip(power, -RobotConstants.Turret.MAX_POWER,
+                    RobotConstants.Turret.MAX_POWER));
             return;
         }
 
@@ -509,11 +543,115 @@ public class TurretSubsystem {
         return Math.signum(angleErrorRad) * Range.clip(power, minPower, maxPower);
     }
 
-    /** Sends the same power to both servos. */
+    /**
+     * Sends the same power to both servos. {@code power} is in turret terms (+ =
+     * counterclockwise); the runtime {@link #servoSign} correction is applied here.
+     */
     private void setServoPower(double power) {
         lastCommandedPower = power;
-        leftServo.setPower(power);
-        rightServo.setPower(power);
+        leftServo.setPower(power * servoSign);
+        rightServo.setPower(power * servoSign);
+    }
+
+    /**
+     * Watches the measured angle against the power commanded on the previous loop.
+     *
+     * <ul>
+     *   <li>Encoder moving the WRONG way by {@link RobotConstants.Turret#RUNAWAY_DEGREES}
+     *       while the power stays at or above
+     *       {@link RobotConstants.Turret#DIRECTION_MONITOR_MIN_POWER} in one direction:
+     *       the servo direction flags are wrong. Flip the runtime servo sign so the loop
+     *       is stable again, and report it so the flags get fixed in RobotConstants.</li>
+     *   <li>Encoder count not changing at all for
+     *       {@link RobotConstants.Turret#ENCODER_STALL_SECONDS} while the power stays at
+     *       or above {@link RobotConstants.Turret#ENCODER_STALL_MIN_POWER}: the turret is
+     *       not being measured (or cannot move). Latch {@link #encoderFault}, which stops
+     *       the servos until {@link #clearFault()}.</li>
+     * </ul>
+     */
+    private void monitorDirection() {
+        double p = lastCommandedPower;
+        double sign = Math.abs(p) >= RobotConstants.Turret.DIRECTION_MONITOR_MIN_POWER
+                ? Math.signum(p) : 0.0;
+        if (sign == 0.0 || sign != monitorPowerSign) {
+            restartMonitorWindow(sign, Math.abs(p));
+            return;
+        }
+        monitorMinAbsPower = Math.min(monitorMinAbsPower, Math.abs(p));
+
+        double movedRad = currentAngleRad - monitorStartAngleRad; // continuous, no wrap
+        double runawayRad = Math.toRadians(RobotConstants.Turret.RUNAWAY_DEGREES);
+
+        if (sign * movedRad <= -runawayRad) {
+            // Pushed one way, went the other way: servo direction is backwards.
+            servoSign = -servoSign;
+            autoFlipCount++;
+            pidfController.reset();
+            restartMonitorWindow(0.0, 0.0);
+        } else if (sign * movedRad >= runawayRad) {
+            // Moving the right way. Start a fresh window from here.
+            restartMonitorWindow(sign, Math.abs(p));
+        } else if (monitorTimer.seconds() >= RobotConstants.Turret.ENCODER_STALL_SECONDS
+                && lastEncoderTicks == monitorStartTicks
+                && monitorMinAbsPower >= RobotConstants.Turret.ENCODER_STALL_MIN_POWER) {
+            encoderFault = true;
+            restartMonitorWindow(0.0, 0.0);
+        }
+    }
+
+    private void restartMonitorWindow(double powerSign, double absPower) {
+        monitorPowerSign = powerSign;
+        monitorMinAbsPower = absPower;
+        monitorStartAngleRad = currentAngleRad;
+        monitorStartTicks = lastEncoderTicks;
+        monitorTimer.reset();
+    }
+
+    /**
+     * Operator jog: drive the turret with a fixed power until {@link #holdCurrentAngle()}
+     * (or another mode) is called. Switches to {@link TurretMode#MANUAL}.
+     *
+     * @param power servo power, + = counterclockwise (left from above)
+     */
+    public void jog(double power) {
+        if (mode != TurretMode.MANUAL) {
+            setMode(TurretMode.MANUAL);
+        }
+        manualPower = power;
+    }
+
+    /**
+     * Stops jogging and holds the turret where it is now ({@link TurretMode#HOME} at the
+     * current measured angle). Used when the jog button is released.
+     */
+    public void holdCurrentAngle() {
+        manualPower = 0.0;
+        homeAngleRad = currentAngleRad;
+        setMode(TurretMode.HOME);
+        // setMode() only resets when the mode changes; make sure the hold starts clean.
+        firstTargetSample = true;
+        onTarget = false;
+    }
+
+    /** @return true if the servos are stopped because the encoder never counted (see {@link #clearFault()}) */
+    public boolean hasEncoderFault() {
+        return encoderFault;
+    }
+
+    /** Clears {@link #hasEncoderFault()} so the turret is driven again. */
+    public void clearFault() {
+        encoderFault = false;
+        restartMonitorWindow(0.0, 0.0);
+    }
+
+    /** @return how many times the servo direction was flipped at run time (0 = flags are right) */
+    public int getAutoFlipCount() {
+        return autoFlipCount;
+    }
+
+    /** @return true if the servos are currently driven opposite to the RobotConstants flags */
+    public boolean isServoDirectionAutoFlipped() {
+        return servoSign < 0;
     }
 
     /**
@@ -606,6 +744,9 @@ public class TurretSubsystem {
             firstTargetSample = true;
             onTarget = false;
         }
+        if (mode != TurretMode.MANUAL) {
+            manualPower = 0.0;
+        }
         this.mode = mode;
         if (mode == TurretMode.DISABLED) {
             stop();
@@ -629,6 +770,11 @@ public class TurretSubsystem {
 
     public TurretMode getMode() {
         return mode;
+    }
+
+    /** @return the chassis-relative angle (radians) held in {@link TurretMode#HOME} */
+    public double getHomeAngleRadians() {
+        return homeAngleRad;
     }
 
     /**
@@ -744,9 +890,24 @@ public class TurretSubsystem {
      * </ul>
      */
     public void addTelemetry(Telemetry telemetry) {
+        if (encoderFault) {
+            telemetry.addLine("!! TURRET ENCODER NOT COUNTING: servos STOPPED. The turret was driven"
+                    + " hard and the encoder ticks never changed. Check the encoder cable in the"
+                    + " encoder socket of the intake motor port (and that the servos move)."
+                    + " G2 Dpad Down retries.");
+        }
+        if (autoFlipCount > 0) {
+            telemetry.addLine(String.format(
+                    "!! SERVO DIRECTION AUTO-FLIPPED (%d x, now %s): set SERVO_LEFT_REVERSED and"
+                            + " SERVO_RIGHT_REVERSED to %b in RobotConstants.",
+                    autoFlipCount, servoSign < 0 ? "reversed" : "as configured",
+                    RobotConstants.Turret.SERVO_LEFT_REVERSED != (servoSign < 0)));
+        }
         String aimingAt;
-        if (!enabled || mode == TurretMode.DISABLED) {
+        if (!enabled || mode == TurretMode.DISABLED || encoderFault) {
             aimingAt = "NOTHING (stopped)";
+        } else if (mode == TurretMode.MANUAL) {
+            aimingAt = String.format("MANUAL JOG power %.2f", manualPower);
         } else if (mode == TurretMode.HOME) {
             aimingAt = String.format("FIXED ANGLE %.0f deg (not the hive)", Math.toDegrees(homeAngleRad));
         } else if (autoSelectSide) {
@@ -781,6 +942,6 @@ public class TurretSubsystem {
      *         not have to be clipped to a soft limit. This is the "safe to shoot" check.
      */
     public boolean isAimedAtTarget() {
-        return enabled && mode == TurretMode.TRACKING && onTarget && !targetClipped;
+        return enabled && !encoderFault && mode == TurretMode.TRACKING && onTarget && !targetClipped;
     }
 }
