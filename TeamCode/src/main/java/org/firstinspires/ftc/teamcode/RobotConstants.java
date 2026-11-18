@@ -237,15 +237,15 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 120.0;
+        public static final double LEFT_KP = 35.0;
         public static final double LEFT_KI = 0.0;
-        public static final double LEFT_KD = 2.0;
-        public static final double LEFT_KF = 10.0;
+        public static final double LEFT_KD = 0.0;
+        public static final double LEFT_KF = 11.63;
 
-        public static final double RIGHT_KP = 120.0;
+        public static final double RIGHT_KP = 35.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 2.0;
-        public static final double RIGHT_KF = 10.0;
+        public static final double RIGHT_KF = 11.83;
 
         /**
          * Gate servo that holds game pieces back from the flywheels. It is
