@@ -50,6 +50,8 @@ public class MotorPidfFinder extends OpMode {
 
     private static final double START_TARGET_RPM = RobotConstants.Outtake.TARGET_RPM;
     private static final double LOW_TARGET_RPM = 1000.0;
+
+    private static final double HIGH_TARGET_RPM = 2100.0;
     private static final double RPM_STEP = 100.0;
 
     /**
@@ -187,8 +189,11 @@ public class MotorPidfFinder extends OpMode {
         if (lowRpm.update(gamepad2.a)) {
             targetRpm = LOW_TARGET_RPM;
         }
-        if (runToggle.update(gamepad1.a)) {
-            running = !running;
+        if (lowRpm.update(gamepad2.a)) {
+            targetRpm = LOW_TARGET_RPM;
+        }
+        if (lowRpm.update(gamepad1.y)) {
+            targetRpm = HIGH_TARGET_RPM;
         }
 
         // ---- Command the motor ----
