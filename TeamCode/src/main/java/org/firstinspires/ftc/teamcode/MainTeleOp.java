@@ -577,16 +577,6 @@ public class MainTeleOp extends OpMode {
                 instant(() -> {
                     intake.stop();
                     outtake.setGateOpen(false);
-                }),
-                waitMs(100),
-                instant(() -> {
-                    intake.intake();
-                    intake.transfer();
-                }),
-                waitMs(RobotConstants.Auto.FEED_TIME_MS),
-                instant(() -> {
-                    intake.stop();
-                    outtake.setGateOpen(false);
                 })
         );
     }

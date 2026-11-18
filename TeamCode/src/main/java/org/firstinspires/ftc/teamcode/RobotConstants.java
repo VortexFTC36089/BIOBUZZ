@@ -220,7 +220,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2130;
+        public static final double TARGET_RPM = 2550;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
@@ -237,15 +237,15 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 35.0;
+        public static final double LEFT_KP = 63.0;
         public static final double LEFT_KI = 0.0;
         public static final double LEFT_KD = 0.0;
-        public static final double LEFT_KF = 11.63;
+        public static final double LEFT_KF = 12.63;
 
-        public static final double RIGHT_KP = 35.0;
+        public static final double RIGHT_KP = 63.0;
         public static final double RIGHT_KI = 0.0;
         public static final double RIGHT_KD = 2.0;
-        public static final double RIGHT_KF = 11.83;
+        public static final double RIGHT_KF = 12.83;
 
         /**
          * Gate servo that holds game pieces back from the flywheels. It is
@@ -588,7 +588,7 @@ public final class RobotConstants {
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 0250.0;
+        public static final double FEED_TIME_MS = 0500.0;
     }
 
     /**
