@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.math.Pose;
 
 /**
@@ -87,6 +88,7 @@ public final class RobotConstants {
      * Motor directions are intentionally not stored here; Pedro's drivetrain
      * config owns direction because the follower is what commands the wheels.
      */
+    @Configurable
     public static final class Drive {
         public static final String FRONT_LEFT = "left_front";
         public static final String FRONT_RIGHT = "right_front";
@@ -100,16 +102,16 @@ public final class RobotConstants {
          * alignment without making the robot feel stalled.
          */
         // TODO(team): tune after first driver practice
-        public static final double SLOW_MODE_MULTIPLIER = 0.30;
+        public static double SLOW_MODE_MULTIPLIER = 0.30;
 
         /**
          * Starting speed multiplier and step size when adjusting drive speed
          * with D-pad Up / D-pad Down.
          */
-        public static final double DEFAULT_SPEED_MULTIPLIER = 1.00;
-        public static final double SPEED_STEP = 0.10;
-        public static final double MIN_SPEED_MULTIPLIER = 0.20;
-        public static final double MAX_SPEED_MULTIPLIER = 1.00;
+        public static double DEFAULT_SPEED_MULTIPLIER = 1.00;
+        public static double SPEED_STEP = 0.10;
+        public static double MIN_SPEED_MULTIPLIER = 0.20;
+        public static double MAX_SPEED_MULTIPLIER = 1.00;
 
         /**
          * Stick magnitude that counts as "the driver is moving" when we cancel
@@ -117,7 +119,7 @@ public final class RobotConstants {
          *
          * <p>A small deadzone avoids cancelling because of stick drift.
          */
-        public static final double AUTOMATION_CANCEL_DEADZONE = 0.15;
+        public static double AUTOMATION_CANCEL_DEADZONE = 0.15;
     }
 
     /**
@@ -138,6 +140,7 @@ public final class RobotConstants {
      * vs negative is a hardware convention; we treat positive as "intake"
      * until the team verifies the motor wiring.
      */
+    @Configurable
     public static final class Intake {
         public static final String MOTOR = "intake";
         public static final String TRANSFER_MOTOR = "transfer";
@@ -146,49 +149,49 @@ public final class RobotConstants {
          * Encoder ticks per output revolution for the transfer motor.
          */
         // TODO(team): set for the real transfer motor / gearbox
-        public static final double TRANSFER_TICKS_PER_REV = 28.0;
+        public static double TRANSFER_TICKS_PER_REV = 28.0;
 
         /**
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static final double TRANSFER_TARGET_RPM = 5000.0;
+        public static double TRANSFER_TARGET_RPM = 5000.0;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
          * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
          */
         // TODO(team): tune transfer velocity PIDF gains on the robot
-        public static final double TRANSFER_KP = 50.0;
-        public static final double TRANSFER_KI = 0.0;
-        public static final double TRANSFER_KD = 0.5;
-        public static final double TRANSFER_KF = 10.0;
+        public static double TRANSFER_KP = 50.0;
+        public static double TRANSFER_KI = 0.0;
+        public static double TRANSFER_KD = 0.5;
+        public static double TRANSFER_KF = 10.0;
 
         /**
          * Power used on the intake motor while pulling game elements in.
          */
         // TODO(team): tune so pieces ingest without jamming
-        public static final double INTAKE_POWER = 1;
+        public static double INTAKE_POWER = 1;
 
         /**
          * Power used on the intake motor while reversing / outtaking.
          * Negative of intake by default so one sign convention is easy to flip later.
          */
         // TODO(team): tune so pieces eject cleanly
-        public static final double OUTTAKE_POWER = -0.80;
+        public static double OUTTAKE_POWER = -0.80;
 
         /**
          * Power used on the transfer motor while pulling game elements in
          * with the intake.
          */
         // TODO(team): tune transfer intake speed on the robot
-        public static final double TRANSFER_INTAKE_POWER = 1;
+        public static double TRANSFER_INTAKE_POWER = 1;
 
         /**
          * Power used on the transfer motor while reversing / ejecting.
          */
         // TODO(team): tune transfer reverse speed on the robot
-        public static final double TRANSFER_REVERSE_POWER = -.8;
+        public static double TRANSFER_REVERSE_POWER = -.8;
 
         /**
          * How far a trigger must be pressed before we treat it as held.
@@ -196,7 +199,7 @@ public final class RobotConstants {
          * <p>Triggers rest slightly above 0.0 on many gamepads, so a deadzone
          * prevents the intake from twitching when nobody is pressing.
          */
-        public static final double TRIGGER_DEADZONE = 0.15;
+        public static double TRIGGER_DEADZONE = 0.15;
     }
 
     /**
@@ -205,6 +208,7 @@ public final class RobotConstants {
      *
      * <p>Both outtake motors use encoder velocity control to hold a target RPM.
      */
+    @Configurable
     public static final class Outtake {
         public static final String LEFT_MOTOR = "outtake_left";
         public static final String RIGHT_MOTOR = "outtake_right";
@@ -214,17 +218,17 @@ public final class RobotConstants {
          * motor; multiply by the gear ratio if there is a gearbox.
          */
         // TODO(team): set for the real outtake motor / gearbox
-        public static final double TICKS_PER_REV = 28.0;
+        public static double TICKS_PER_REV = 28.0;
 
         /**
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static final double TARGET_RPM = 2450;
+        public static double TARGET_RPM = 2450;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
-        public static final double RPM_TOLERANCE = 100.0;
+        public static double RPM_TOLERANCE = 100.0;
 
         /**
          * Velocity PIDF coefficients applied to the outtake motors in
@@ -237,15 +241,15 @@ public final class RobotConstants {
          * <p>Each motor has its own set so the two flywheels can be tuned separately.
          */
         // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static final double LEFT_KP = 173.0;
-        public static final double LEFT_KI = 0.0;
-        public static final double LEFT_KD = 1.0;
-        public static final double LEFT_KF = 10.0;
+        public static double LEFT_KP = 173.0;
+        public static double LEFT_KI = 0.0;
+        public static double LEFT_KD = 1.0;
+        public static double LEFT_KF = 10.0;
 
-        public static final double RIGHT_KP = 173.0;
-        public static final double RIGHT_KI = 0.0;
-        public static final double RIGHT_KD = 1.0;
-        public static final double RIGHT_KF = 10.0;
+        public static double RIGHT_KP = 173.0;
+        public static double RIGHT_KI = 0.0;
+        public static double RIGHT_KD = 1.0;
+        public static double RIGHT_KF = 10.0;
 
         /**
          * Gate servo that holds game pieces back from the flywheels. It is
@@ -254,8 +258,8 @@ public final class RobotConstants {
          */
         public static final String GATE_SERVO = "outtake_gate";
         // TODO(team): set both gate positions on the robot (0.0 to 1.0)
-        public static final double GATE_CLOSED_POSITION = 0;
-        public static final double GATE_OPEN_POSITION = .212;
+        public static double GATE_CLOSED_POSITION = 0;
+        public static double GATE_OPEN_POSITION = .212;
     }
 
 

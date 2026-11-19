@@ -46,6 +46,10 @@ public class IntakeSubsystem {
     private final DcMotorEx transferMotor;
     private IntakeState state;
     private TransferState transferState;
+    private double appliedTransferKp;
+    private double appliedTransferKi;
+    private double appliedTransferKd;
+    private double appliedTransferKf;
 
     /**
      * Finds the intake and transfer motors and puts both in a known-safe configuration.
@@ -80,6 +84,10 @@ public class IntakeSubsystem {
                 RobotConstants.Intake.TRANSFER_KD,
                 RobotConstants.Intake.TRANSFER_KF
         );
+        appliedTransferKp = RobotConstants.Intake.TRANSFER_KP;
+        appliedTransferKi = RobotConstants.Intake.TRANSFER_KI;
+        appliedTransferKd = RobotConstants.Intake.TRANSFER_KD;
+        appliedTransferKf = RobotConstants.Intake.TRANSFER_KF;
 
         state = IntakeState.OFF;
         transferState = TransferState.OFF;
@@ -177,6 +185,8 @@ public class IntakeSubsystem {
      * so TeleOp never hardcodes a number.
      */
     public void update() {
+        updateTransferPidfIfChanged();
+
         switch (state) {
             case INTAKING:
                 motor.setPower(RobotConstants.Intake.INTAKE_POWER);
@@ -206,6 +216,23 @@ public class IntakeSubsystem {
                 transferMotor.setPower(0.0);
                 break;
         }
+    }
+
+    private void updateTransferPidfIfChanged() {
+        double kp = RobotConstants.Intake.TRANSFER_KP;
+        double ki = RobotConstants.Intake.TRANSFER_KI;
+        double kd = RobotConstants.Intake.TRANSFER_KD;
+        double kf = RobotConstants.Intake.TRANSFER_KF;
+        if (kp == appliedTransferKp && ki == appliedTransferKi
+                && kd == appliedTransferKd && kf == appliedTransferKf) {
+            return;
+        }
+
+        transferMotor.setVelocityPIDFCoefficients(kp, ki, kd, kf);
+        appliedTransferKp = kp;
+        appliedTransferKi = ki;
+        appliedTransferKd = kd;
+        appliedTransferKf = kf;
     }
 
     /**

@@ -46,6 +46,14 @@ public class OuttakeSubsystem {
     private boolean gateRequestedOpen;
     private MotorState motorState;
     private double targetRpm;
+    private double appliedLeftKp;
+    private double appliedLeftKi;
+    private double appliedLeftKd;
+    private double appliedLeftKf;
+    private double appliedRightKp;
+    private double appliedRightKi;
+    private double appliedRightKd;
+    private double appliedRightKf;
 
     // Measured RPM, refreshed once per update() so every check in a loop
     // iteration sees the same encoder sample.
@@ -79,11 +87,19 @@ public class OuttakeSubsystem {
                 RobotConstants.Outtake.LEFT_KI,
                 RobotConstants.Outtake.LEFT_KD,
                 RobotConstants.Outtake.LEFT_KF);
+        appliedLeftKp = RobotConstants.Outtake.LEFT_KP;
+        appliedLeftKi = RobotConstants.Outtake.LEFT_KI;
+        appliedLeftKd = RobotConstants.Outtake.LEFT_KD;
+        appliedLeftKf = RobotConstants.Outtake.LEFT_KF;
         configureVelocityControl(rightMotor,
                 RobotConstants.Outtake.RIGHT_KP,
                 RobotConstants.Outtake.RIGHT_KI,
                 RobotConstants.Outtake.RIGHT_KD,
                 RobotConstants.Outtake.RIGHT_KF);
+        appliedRightKp = RobotConstants.Outtake.RIGHT_KP;
+        appliedRightKi = RobotConstants.Outtake.RIGHT_KI;
+        appliedRightKd = RobotConstants.Outtake.RIGHT_KD;
+        appliedRightKf = RobotConstants.Outtake.RIGHT_KF;
 
         motorState = MotorState.OFF;
         targetRpm = 0.0;
@@ -186,6 +202,8 @@ public class OuttakeSubsystem {
      * <p>Call once per OpMode loop.</p>
      */
     public void update() {
+        updateVelocityPidfIfChanged();
+
         // 0. Gate: follow the manual request, independent of flywheel state.
         applyGate();
 
@@ -209,6 +227,34 @@ public class OuttakeSubsystem {
         boolean leftOk = Math.abs(measuredLeftRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         boolean rightOk = Math.abs(measuredRightRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
         motorState = (leftOk && rightOk) ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
+    }
+
+    private void updateVelocityPidfIfChanged() {
+        double leftKp = RobotConstants.Outtake.LEFT_KP;
+        double leftKi = RobotConstants.Outtake.LEFT_KI;
+        double leftKd = RobotConstants.Outtake.LEFT_KD;
+        double leftKf = RobotConstants.Outtake.LEFT_KF;
+        if (leftKp != appliedLeftKp || leftKi != appliedLeftKi
+                || leftKd != appliedLeftKd || leftKf != appliedLeftKf) {
+            leftMotor.setVelocityPIDFCoefficients(leftKp, leftKi, leftKd, leftKf);
+            appliedLeftKp = leftKp;
+            appliedLeftKi = leftKi;
+            appliedLeftKd = leftKd;
+            appliedLeftKf = leftKf;
+        }
+
+        double rightKp = RobotConstants.Outtake.RIGHT_KP;
+        double rightKi = RobotConstants.Outtake.RIGHT_KI;
+        double rightKd = RobotConstants.Outtake.RIGHT_KD;
+        double rightKf = RobotConstants.Outtake.RIGHT_KF;
+        if (rightKp != appliedRightKp || rightKi != appliedRightKi
+                || rightKd != appliedRightKd || rightKf != appliedRightKf) {
+            rightMotor.setVelocityPIDFCoefficients(rightKp, rightKi, rightKd, rightKf);
+            appliedRightKp = rightKp;
+            appliedRightKi = rightKi;
+            appliedRightKd = rightKd;
+            appliedRightKf = rightKf;
+        }
     }
 
     /**
