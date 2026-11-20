@@ -9,10 +9,16 @@ import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 import static com.pedropathing.api.Paths.line;
 import static com.pedropathing.ivy.Scheduler.schedule;
@@ -69,9 +75,15 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton servoToggle = new ToggleButton();
     private final ToggleButton turretHiveToggle = new ToggleButton();
     private final ToggleButton turretForwardToggle = new ToggleButton();
-    private final ToggleButton turretHomeToggle = new ToggleButton();
     /** True while Gamepad 2 Dpad Left/Right was jogging the turret on the last loop. */
     private boolean turretJogging;
+    /**
+     * Every motor port and its encoder count at Init. The init screen uses it to show
+     * which port's count changes when the turret is turned by hand, which is the port
+     * {@link RobotConstants.Turret#ENCODER_PORT} must name.
+     */
+    private final Map<String, DcMotorEx> encoderPorts = new LinkedHashMap<>();
+    private final Map<String, Integer> encoderPortStartTicks = new HashMap<>();
     private final ToggleButton turretZeroToggle = new ToggleButton();
     private final ToggleButton poseDefaultToggle = new ToggleButton();
     private final ToggleButton poseAutoToggle = new ToggleButton();
@@ -81,7 +93,6 @@ public class MainTeleOp extends OpMode {
     private double fieldCentricOffsetRad;
     private boolean drivingToHome;
     private boolean servoAtPositionB;
-    private boolean turretAtSideAngle;
     private boolean wasShootTrigger;
     private Command activeShoot;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
@@ -141,13 +152,14 @@ public class MainTeleOp extends OpMode {
         // constructor zeroes the through-bore encoder here. That zero is only
         // kept when no autonomous has just run (see below); then the turret
         // must be pointing straight forward right now (or press Gamepad 2 Y on
-        // the init screen once it is). Must be built AFTER the intake, because
-        // the encoder is read through the intake motor's port. Skipped
-        // entirely while TURRET_ENABLED is false.
+        // the init screen once it is). Must be built AFTER the follower and the
+        // intake, because the encoder is read through one of their motor ports
+        // (Turret.ENCODER_PORT). Skipped entirely while TURRET_ENABLED is false.
         turretZeroKeptFrom = null;
         if (TURRET_ENABLED) {
             turret = new TurretSubsystem(hardwareMap);
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+            rememberEncoderCounts();
         } else {
             turret = null;
         }
@@ -224,6 +236,60 @@ public class MainTeleOp extends OpMode {
         writeInitTelemetry();
     }
 
+    /**
+     * Records the encoder count of every configured motor port, so the init screen can
+     * show which counts change afterwards. Read-only; nothing is commanded.
+     */
+    private void rememberEncoderCounts() {
+        encoderPorts.clear();
+        encoderPortStartTicks.clear();
+        for (DcMotorEx motor : hardwareMap.getAll(DcMotorEx.class)) {
+            Set<String> names = hardwareMap.getNamesOf(motor);
+            if (names.isEmpty()) {
+                continue;
+            }
+            String name = names.iterator().next();
+            encoderPorts.put(name, motor);
+            encoderPortStartTicks.put(name, motor.getCurrentPosition());
+        }
+    }
+
+    /**
+     * Init-screen check that {@link RobotConstants.Turret#ENCODER_PORT} names the port
+     * the turret encoder is really plugged into. Nothing is powered in Init, so the only
+     * count that changes when the turret is turned by hand is the turret encoder's.
+     */
+    private void addEncoderPortCheck() {
+        String turretPort = RobotConstants.Turret.ENCODER_PORT;
+        StringBuilder moving = new StringBuilder();
+        boolean turretPortMoving = false;
+        for (Map.Entry<String, DcMotorEx> port : encoderPorts.entrySet()) {
+            int moved = port.getValue().getCurrentPosition() - encoderPortStartTicks.get(port.getKey());
+            if (Math.abs(moved) >= RobotConstants.Turret.ENCODER_STALL_MIN_TICKS) {
+                if (moving.length() > 0) {
+                    moving.append(", ");
+                }
+                moving.append(port.getKey()).append(" (").append(moved).append(")");
+                if (port.getKey().equals(turretPort)) {
+                    turretPortMoving = true;
+                }
+            }
+        }
+        telemetry.addData("Turret encoder is read from port", "'%s'", turretPort);
+        telemetry.addData("Ports whose count changed since Init",
+                moving.length() > 0 ? moving.toString() : "none yet (turn the turret by hand)");
+        if (turretPortMoving) {
+            telemetry.addLine("  OK: the turret encoder is counting on '" + turretPort + "'.");
+        } else if (moving.length() > 0) {
+            telemetry.addLine("  !! WRONG PORT: you turned the turret and '" + turretPort + "' did not count."
+                    + " Set Turret.ENCODER_PORT in RobotConstants to the port listed above,"
+                    + " or the turret will not aim.");
+        } else {
+            telemetry.addLine("  Check 0: turn the turret by hand. '" + turretPort + "' must show up above."
+                    + " If nothing shows up, the encoder cable is not in any motor port's encoder socket.");
+        }
+    }
+
     /** Declares the turret's current direction to be straight forward. */
     private void zeroTurretHere() {
         if (turret != null) {
@@ -274,15 +340,18 @@ public class MainTeleOp extends OpMode {
                 + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE) != null
                         ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
         if (turret != null) {
+            addEncoderPortCheck();
             telemetry.addData("Turret measuredAngleDeg (live)", "%.1f", turret.getCurrentAngleDegrees());
-            telemetry.addData("Turret encoderTicks (live)", turret.getEncoderTicks());
+            telemetry.addData("Turret ticks since zero (live)", turret.getTicksSinceZero());
             telemetry.addLine(turretZeroKeptFrom != null
                     ? "  Turret zero KEPT from " + turretZeroKeptFrom
                             + ": a non-zero angle is correct. G2 Y = zero it here instead."
                     : "  Turret must point straight forward and read 0.0. G2 Y = zero it here.");
             telemetry.addLine("  Check 1: turn the TURRET LEFT by hand (counterclockwise from above), angle must go UP."
                     + " If it goes DOWN, flip Turret.ENCODER_REVERSED.");
-            telemetry.addLine("  Check 2: turn the ROBOT LEFT by hand, Heading (deg) after Play must go UP.");
+            telemetry.addLine("  Check 2: turn the TURRET ONE FULL TURN by hand, angle must read 360."
+                    + " If not, set Turret.ENCODER_TO_TURRET_RATIO to 8192 / (ticks since zero).");
+            telemetry.addLine("  Check 3: turn the ROBOT LEFT by hand, Heading (deg) after Play must go UP.");
             telemetry.addLine("  The turret starts moving by itself when you press Play. Hands clear.");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
@@ -296,12 +365,11 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (waits for the turret to aim)");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (turret != null) {
-            telemetry.addLine("Turret aims at the HIVE by itself (top/bottom side picked automatically)");
-            telemetry.addLine("G2: Dpad Up = turret faces straight ahead; press again = back to the hive");
-            telemetry.addLine("G2: Dpad Down = back to the hive");
-            telemetry.addLine("G2: Dpad Left/Right HOLD = jog turret left/right, holds where released"
+            telemetry.addLine("Turret tracks the HIVE from Play on (top/bottom side picked from the robot's Y)");
+            telemetry.addLine("G2: Dpad Down = TRACK the hive");
+            telemetry.addLine("G2: Dpad Up = turret faces STRAIGHT AHEAD on the robot");
+            telemetry.addLine("G2: Dpad Left/Right HOLD = move turret left/right by hand, stops where released"
                     + " (Dpad LEFT must turn it LEFT and make the angle go UP)");
-            telemetry.addLine("G2: LB = turret 90 deg left / straight forward (Dpad Down to aim again)");
         }
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
                 ? "NOT CONNECTED (press Start+B on it)" : "connected");
@@ -612,13 +680,15 @@ public class MainTeleOp extends OpMode {
 
     /**
      * @return {@code true} if the shot does not need to wait for the turret:
-     *         there is no turret, the turret is aimed at its target, or the
-     *         operator has deliberately parked it (HOME / DISABLED) and is
-     *         aiming with the whole robot instead
+     *         there is no turret, the turret is aimed at its target, the
+     *         operator has deliberately parked it (HOME / MANUAL / DISABLED) and
+     *         is aiming with the whole robot instead, or a fault has stopped it
+     *         (it will not get any closer by waiting)
      */
     private boolean turretReadyToShoot() {
         return turret == null
                 || turret.getMode() != TurretSubsystem.TurretMode.TRACKING
+                || turret.hasEncoderFault()
                 || turret.isAimedAtTarget();
     }
 
@@ -634,71 +704,53 @@ public class MainTeleOp extends OpMode {
     /**
      * Gamepad 2 turret controls. The hive is the only field target.
      *
-     * <p>The turret aims at the hive (TRACKING) from Play on, with the top or bottom
-     * side picked from the robot's Y position. Every button below that leaves the hive
-     * is undone by pressing it again or by Dpad Down.
-     *
      * <ul>
-     *   <li>Dpad Up: face straight ahead in the robot's heading (HOME at 0 degrees).
-     *       Press again to go back to the hive.</li>
-     *   <li>Dpad Down: back to the hive. Also clears an encoder fault and retries.</li>
-     *   <li>Dpad Left / Right (hold): jog the turret left / right at
-     *       {@link RobotConstants.Turret#JOG_POWER}; on release it holds the angle it
-     *       stopped at. Dpad LEFT must turn the turret LEFT (counterclockwise from
-     *       above) and make measuredAngleDeg go UP: that is the direction check.</li>
-     *   <li>LB: stop tracking and turn 90 degrees
-     *       ({@link RobotConstants.Turret#SIDE_ANGLE_RADIANS}) from straight forward;
-     *       press again to turn back to straight forward.</li>
+     *   <li>Dpad Left (hold): move the turret LEFT (counterclockwise from above) at
+     *       {@link RobotConstants.Turret#JOG_POWER}. It stops where it is when the button
+     *       is released and stays in MANUAL until Dpad Up or Down is pressed.</li>
+     *   <li>Dpad Right (hold): the same, to the RIGHT.</li>
+     *   <li>Dpad Up: face STRAIGHT AHEAD on the robot and hold that
+     *       ({@link RobotConstants.Turret#HOME_ANGLE_RADIANS}). Pressing it again changes
+     *       nothing.</li>
+     *   <li>Dpad Down: TRACK the hive. The aim comes from the turret encoder angle and
+     *       the hive position on the field, and the robot's field Y picks the top or
+     *       bottom hive side.</li>
      * </ul>
+     *
+     * <p>Dpad Up and Down also clear a turret fault stop and try again. While a jog button
+     * is held it wins over Up / Down; press Up or Down after letting go.
+     *
+     * <p>The turret is in TRACKING from Play on (set in {@link #init()}).
      */
     private void updateTurretFromGamepad() {
-        if (turretForwardToggle.update(gamepad2.dpad_up)) {
-            boolean facingForward = turret.getMode() == TurretSubsystem.TurretMode.HOME
-                    && !turretAtSideAngle
-                    && turret.getHomeAngleRadians() == RobotConstants.Turret.HOME_ANGLE_RADIANS;
-            if (facingForward) {
-                aimTurretAtHive();
-            } else {
-                turret.setHomeAngle(RobotConstants.Turret.HOME_ANGLE_RADIANS);
-                turret.setMode(TurretSubsystem.TurretMode.HOME);
-                turretAtSideAngle = false;
-            }
-        }
-        if (turretHiveToggle.update(gamepad2.dpad_down)) {
-            turret.clearFault();
-            aimTurretAtHive();
-        }
+        // Read both edges every loop, even while jogging, so a button held through a jog
+        // does not fire later by itself.
+        boolean forwardPressed = turretForwardToggle.update(gamepad2.dpad_up);
+        boolean hivePressed = turretHiveToggle.update(gamepad2.dpad_down);
 
-        // Jog: held buttons, not edges. Left = +power (counterclockwise).
+        // Manual move: held buttons, not edges. Left = +power (counterclockwise).
         boolean jogLeft = gamepad2.dpad_left;
         boolean jogRight = gamepad2.dpad_right;
         if (jogLeft != jogRight) {
             turret.jog(jogLeft ? RobotConstants.Turret.JOG_POWER : -RobotConstants.Turret.JOG_POWER);
             turretJogging = true;
-            turretAtSideAngle = false;
-        } else if (turretJogging) {
-            // Both released (or both held): stop and hold the angle reached.
-            turret.holdCurrentAngle();
+            return;
+        }
+        if (turretJogging) {
+            // Both released (or both held): stop where it is. Stays in MANUAL.
+            turret.jog(0.0);
             turretJogging = false;
         }
 
-        if (turretHomeToggle.update(gamepad2.left_bumper)) {
-            // First press (or first press after tracking): turn to the side
-            // angle. Next press: turn back to straight forward. Repeats.
-            boolean holdingFixedAngle = turret.getMode() == TurretSubsystem.TurretMode.HOME;
-            turretAtSideAngle = !(holdingFixedAngle && turretAtSideAngle);
-            turret.setHomeAngle(turretAtSideAngle
-                    ? RobotConstants.Turret.SIDE_ANGLE_RADIANS
-                    : RobotConstants.Turret.HOME_ANGLE_RADIANS);
+        if (hivePressed) {
+            turret.clearFault();
+            turret.setAutoSelectSide(true);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        } else if (forwardPressed) {
+            turret.clearFault();
+            turret.setHomeAngle(RobotConstants.Turret.HOME_ANGLE_RADIANS);
             turret.setMode(TurretSubsystem.TurretMode.HOME);
         }
-    }
-
-    /** Puts the turret back on the hive, with automatic top/bottom side selection. */
-    private void aimTurretAtHive() {
-        turret.setAutoSelectSide(true);
-        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
-        turretAtSideAngle = false;
     }
 
     /**
@@ -712,6 +764,15 @@ public class MainTeleOp extends OpMode {
         lastLoopNanos = now;
 
         Pose pose = follower.pose();
+        // Turret first: its state, warnings and angles must be visible without
+        // scrolling the Driver Station, because they show why it is or is not aiming.
+        if (turret != null) {
+            turret.addTelemetry(telemetry);
+            telemetry.addData("Turret target (in)", "(%.1f, %.1f), %.1f in away",
+                    turret.getTargetX(), turret.getTargetY(), turret.getDistanceToTarget(pose));
+        } else {
+            telemetry.addData("Turret", "DISABLED (TURRET_ENABLED = false)");
+        }
         telemetry.addData("X (in)", pose.x());
         telemetry.addData("Y (in)", pose.y());
         telemetry.addData("Heading (deg)", Math.toDegrees(pose.heading()));
@@ -731,14 +792,6 @@ public class MainTeleOp extends OpMode {
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
                 ? "NOT CONNECTED (press Start+B on it)" : "connected");
-        if (turret != null) {
-            telemetry.addData("Turret mode", turret.getMode());
-            telemetry.addData("Turret target (in)", "(%.1f, %.1f)", turret.getTargetX(), turret.getTargetY());
-            telemetry.addData("Target distance (in)", "%.1f", turret.getDistanceToTarget(pose));
-            turret.addTelemetry(telemetry);
-        } else {
-            telemetry.addData("Turret", "DISABLED");
-        }
         telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();

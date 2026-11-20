@@ -20,8 +20,9 @@ import com.pedropathing.math.Pose;
  *       {@code outtake_left}, {@code outtake_right}</li>
  *    <li>Two turret {@link com.qualcomm.robotcore.hardware.CRServo}s:
  *       {@code turretServoLeft}, {@code turretServoRight}, plus a REV Through Bore
- *       Encoder V2 plugged into the encoder socket of the {@code intake} motor port
- *       (all eight motor ports are in use, so it has no config name of its own)</li>
+ *       Encoder V2 plugged into the encoder socket of the motor port named by
+ *       {@code Turret.ENCODER_PORT} (all eight motor ports are in use, so it has no
+ *       config name of its own)</li>
  *    <li>One two-position {@link com.qualcomm.robotcore.hardware.Servo}: {@code flower}</li>
  *    <li>goBILDA Pinpoint localizer named {@code pinpoint}</li>
  * </ul>
@@ -261,9 +262,10 @@ public final class RobotConstants {
 
     /**
      * goBILDA Gear-Driven Turret (2.75:1 Ratio, 105mm ID) driven by TWO continuous-rotation
-     * servos and measured by a REV Through Bore Encoder V2 mounted on one servo's output
-     * shaft. Both servos sit on the same side of the turret and their pinions mesh with the
-     * same turret gear. The turret angle is read from the encoder, so it does not drift.
+     * servos and measured by a REV Through Bore Encoder V2 geared to the turret ring (on
+     * its own small gear, see {@link #ENCODER_TO_TURRET_RATIO}). Both servos sit on the
+     * same side of the turret and their pinions mesh with the same turret gear. The turret
+     * angle is read from the encoder, so it does not drift.
      */
     public static final class Turret {
         // Hardware map names (must match the Robot Controller config exactly).
@@ -278,16 +280,24 @@ public final class RobotConstants {
          * two outtake), so the turret encoder cannot have a port or a config name of its
          * own. Its 4-pin quadrature cable goes into the ENCODER socket next to a motor that
          * does not use its own encoder, and the code reads the count through that motor.
-         * The intake motor is the right one: it runs without its encoder. Do NOT use the
-         * transfer or outtake ports (they run on their encoders).
+         * The drive motors and the intake motor qualify (they run without their encoders).
+         * Do NOT use the transfer or outtake ports (they run on their encoders).
          * REV recommends hub motor ports 0 or 3 for this high-resolution encoder.
          *
-         * <p>If the cable is in a different motor's encoder socket, put THAT motor's config
-         * name here. The turret code only reads the count; it never changes that motor's
-         * mode, power or direction.
+         * <p>This name MUST be the motor whose encoder socket the cable is really in. If it
+         * is not, the measured turret angle never changes and the turret cannot aim. The
+         * turret code only reads the count; it never changes that motor's mode, power or
+         * direction.
          */
-        // TODO(team): confirm the encoder cable is in the intake motor's encoder socket
-        public static final String ENCODER_PORT = Intake.MOTOR;
+        // Changed from Intake.MOTOR on 2026-11-20. The turret spun slow circles in TRACKING
+        // because the count read through the intake port never changed, so the measured
+        // angle was stuck at 0. Branch today_working-one had already moved this to the
+        // front-right drive port on 2026-11-16 (commit 4742a74); this branch never got that
+        // change. CONFIRM IT on the Main TeleOp init screen: turn the turret by hand, the
+        // screen lists every motor port whose encoder count is changing. The port it lists
+        // is the name that belongs here. (Pedro does not use the drive motor encoders; the
+        // robot is localized by the Pinpoint.)
+        public static final String ENCODER_PORT = Drive.FRONT_RIGHT;
 
         /** Quadrature counts per revolution of the REV Through Bore Encoder V2 (2048 CPR x 4). */
         public static final double ENCODER_TICKS_PER_REV = 8192.0;
@@ -296,12 +306,19 @@ public final class RobotConstants {
         public static final double GEAR_RATIO = 2.75;
 
         /**
-         * Turret turns per ONE encoder turn. The encoder rides on a servo output shaft, and
-         * the servo pinion turns {@link #GEAR_RATIO} times per turret turn, so this is
-         * {@code 1 / GEAR_RATIO}. If the encoder is ever moved onto the turret ring itself,
-         * set this to 1.0. Check: one full turret turn by hand must change
-         * {@code Turret encoderTicks} by 22528.
+         * Turret turns per ONE encoder turn. {@code 1 / GEAR_RATIO} is only right if the
+         * encoder turns exactly as often as a servo pinion (it rides on a servo shaft, or on
+         * its own gear with the SAME tooth count as the servo pinion). With the encoder on
+         * its own gear on the turret ring, this is
+         * {@code encoder gear teeth / turret ring teeth}.
+         *
+         * <p>Measure it instead of trusting it: on the Main TeleOp init screen, zero the
+         * turret (Gamepad 2 Y), turn it exactly ONE full turn by hand and read
+         * {@code ticks since zero}. Then set this to {@code 8192.0 / that number}
+         * (22528 ticks means the value below is already right). A wrong value does not make
+         * the turret spin; it makes it aim off by a constant factor.
          */
+        // TODO(team): measure on the robot (see above)
         public static final double ENCODER_TO_TURRET_RATIO = 1.0 / GEAR_RATIO;
 
         /**
@@ -313,14 +330,14 @@ public final class RobotConstants {
          * there and the init screen shows the live angle and ticks, so turn the turret by
          * hand and watch. The sign also depends on the motor TYPE chosen for the shared
          * port in the Robot Controller config (some types, such as goBILDA 5202 and REV HD
-         * Hex, are counted in reverse), so re-check this flag after changing the type. The
-         * intake motor's own FORWARD/REVERSE setting does not matter: TurretSubsystem
-         * cancels it out.
+         * Hex, are counted in reverse), so re-check this flag after changing the type or
+         * {@link #ENCODER_PORT}. The shared motor's own FORWARD/REVERSE setting does not
+         * matter: TurretSubsystem cancels it out.
          */
-        // Set true on 2026-11-18: with false, the turret turned the SAME way as the chassis
-        // (a mirrored but stable loop), which means the encoder (on the pinion, which spins
-        // opposite to the turret ring) and both servos were all counted backwards. Verify
-        // on the init screen: turret turned LEFT by hand -> measuredAngleDeg must go UP.
+        // Set true on 2026-11-18 as a guess (the encoder was not being read that day, see
+        // ENCODER_PORT). NOT YET VERIFIED. Verify on the init screen: turret turned LEFT by
+        // hand -> measuredAngleDeg must go UP. If it goes DOWN, set this to false.
+        // TODO(team): verify on the robot
         public static final boolean ENCODER_REVERSED = true;
 
         /**
@@ -334,11 +351,13 @@ public final class RobotConstants {
          * true). If the turret turns away from the target instead of toward it, flip
          * BOTH flags together, never just one.
          */
-        // Set true on 2026-11-18 together with ENCODER_REVERSED (see above). If these are
-        // wrong the turret cannot run away any more: TurretSubsystem notices the encoder
-        // moving against the commanded power, flips the servo direction at run time and
-        // shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station. When that shows up,
-        // flip BOTH of these flags so the correction is not needed every match.
+        // Set true on 2026-11-18 together with ENCODER_REVERSED (see above). NOTE: on that
+        // day the encoder was not being read (see ENCODER_PORT), so ENCODER_REVERSED was a
+        // guess and still has to be checked by hand on the init screen. If the servo and
+        // encoder directions disagree the turret cannot run away: TurretSubsystem notices
+        // the encoder moving against the commanded power, flips the servo direction at run
+        // time and shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station with the
+        // steps to find out which flag is the wrong one.
         public static final boolean SERVO_LEFT_REVERSED = true;
         public static final boolean SERVO_RIGHT_REVERSED = true;
 
@@ -352,8 +371,8 @@ public final class RobotConstants {
         /**
          * Direction monitor: a commanded power at or above this (either sign) is expected
          * to move the turret THAT way. If instead the encoder moves the other way by
-         * {@link #RUNAWAY_DEGREES}, the servo direction is wrong and the subsystem flips
-         * it at run time (see {@link #SERVO_LEFT_REVERSED}).
+         * {@link #RUNAWAY_DEGREES}, the servo and encoder directions disagree and the
+         * subsystem flips the servo direction at run time (see {@link #SERVO_LEFT_REVERSED}).
          */
         public static final double DIRECTION_MONITOR_MIN_POWER = 0.30;
 
@@ -361,16 +380,68 @@ public final class RobotConstants {
         public static final double RUNAWAY_DEGREES = 10.0;
 
         /**
-         * Encoder monitor: if the servos are commanded at or above this power for
-         * {@link #ENCODER_STALL_SECONDS} and the encoder count does not change AT ALL, the
-         * turret is not being measured (encoder cable out, wrong port) or cannot move. The
-         * servos are then stopped instead of spinning open-loop, and the Driver Station
-         * shows "TURRET ENCODER NOT COUNTING". Gamepad 2 Dpad Down clears it and retries.
+         * Coast allowance for the direction monitor, in seconds. After a fast move the
+         * turret coasts past the target while the command has already reversed. That is
+         * normal, not a reversed servo, so on top of {@link #RUNAWAY_DEGREES} the turret may
+         * travel against a new command by (its speed when the command reversed) x (this
+         * time) before the monitor reacts. Without it, a heavy turret's overshoot causes a
+         * false flip, and a false flip makes the turret run away for real. Raise this if
+         * "SERVO DIRECTION AUTO-FLIPPED" shows up on a turret whose directions are right.
          */
-        public static final double ENCODER_STALL_MIN_POWER = 0.50;
+        public static final double DIRECTION_MONITOR_COAST_SECONDS = 0.3;
+
+        /**
+         * Direction monitor, second test. With reversed directions and the target behind
+         * the turret, the turret does not run away: it gets pushed to the point exactly
+         * OPPOSITE the target and buzzes there, the command reversing every loop or two.
+         * A correct turret never reverses its command while it is more than 90 degrees
+         * from the target (it only does that once, when the target passes directly
+         * behind). This many reversals in {@link #ANTIPODE_CHATTER_SECONDS}, all more than
+         * 90 degrees from the target, are treated as reversed directions.
+         */
+        public static final int ANTIPODE_CHATTER_REVERSALS = 4;
+
+        /** See {@link #ANTIPODE_CHATTER_REVERSALS}. */
+        public static final double ANTIPODE_CHATTER_SECONDS = 1.0;
+
+        /**
+         * Most run-time servo direction flips allowed in one OpMode. One flip fixes a
+         * wrong flag. If the monitor wants more than this, something else is wrong (the
+         * encoder is slipping or reading another mechanism), so the turret is stopped
+         * instead of being flipped back and forth.
+         */
+        public static final int MAX_AUTO_FLIPS = 2;
+
+        /**
+         * Encoder monitor. While HOME or TRACKING is driving the servos with any power
+         * meant to move the turret ({@link #MIN_COMMAND_POWER} or more), the encoder count
+         * must change. If it moves by less than {@link #ENCODER_STALL_MIN_TICKS} for
+         * {@link #ENCODER_STALL_SECONDS} (at or above this power) or for
+         * {@link #ENCODER_STALL_SLOW_SECONDS} (below this power), the turret is not being
+         * measured (encoder cable out, wrong port) or cannot move. The servos are then
+         * stopped instead of spinning open-loop, and the Driver Station shows
+         * "TURRET STOPPED: ENCODER NOT COUNTING". Manual jog (Dpad Left / Right) still
+         * works; Gamepad 2 Dpad Down or Up clears the stop and retries.
+         */
+        public static final double ENCODER_STALL_MIN_POWER = 0.30;
 
         /** See {@link #ENCODER_STALL_MIN_POWER}. */
         public static final double ENCODER_STALL_SECONDS = 0.5;
+
+        /**
+         * See {@link #ENCODER_STALL_MIN_POWER}. Longer than the fast time so a turret that
+         * is slow to break away at the minimum power is not stopped by mistake. If a turret
+         * with a WORKING encoder gets stopped a degree or two short of the target, the
+         * minimum power is too weak to move it: measure {@link #SERVO_DEADBAND_POWER}.
+         */
+        public static final double ENCODER_STALL_SLOW_SECONDS = 1.0;
+
+        /**
+         * See {@link #ENCODER_STALL_MIN_POWER}. About half a degree of turret travel. More
+         * than one count, so an encoder with one dead channel (the count flickers by 1)
+         * still counts as not counting.
+         */
+        public static final int ENCODER_STALL_MIN_TICKS = 30;
 
         /**
          * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
@@ -463,15 +534,11 @@ public final class RobotConstants {
         public static final double DEFAULT_TARGET_X_INCHES = BOTTOM_TARGET_X_INCHES;
         public static final double DEFAULT_TARGET_Y_INCHES = BOTTOM_TARGET_Y_INCHES;
 
-        /** Chassis-relative angle (radians) the turret returns to in HOME mode. */
-        public static final double HOME_ANGLE_RADIANS = 0.0;
-
         /**
-         * Chassis-relative angle (radians) the turret turns to on the first press of
-         * Gamepad 2 LB; the next press returns it to {@link #HOME_ANGLE_RADIANS}.
-         * Positive is counterclockwise (left); use -90 to turn right instead.
+         * Chassis-relative angle (radians) the turret turns to and holds in HOME mode
+         * (Gamepad 2 Dpad Up). 0 is straight ahead on the robot.
          */
-        public static final double SIDE_ANGLE_RADIANS = Math.toRadians(90.0);
+        public static final double HOME_ANGLE_RADIANS = 0.0;
 
         /**
          * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
