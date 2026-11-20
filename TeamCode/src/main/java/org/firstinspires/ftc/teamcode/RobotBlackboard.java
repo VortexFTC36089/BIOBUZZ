@@ -12,9 +12,6 @@ public final class RobotBlackboard {
     public static final String LAST_AUTO_POSE = "org.firstinspires.ftc.teamcode.lastAutoPose";
     public static final String LAST_AUTO_TURRET_ZERO_TICKS =
             "org.firstinspires.ftc.teamcode.lastAutoTurretZeroTicks";
-    public static final String LAST_TELEOP_POSE = "org.firstinspires.ftc.teamcode.lastTeleOpPose";
-    public static final String LAST_TELEOP_TURRET_ZERO_TICKS =
-            "org.firstinspires.ftc.teamcode.lastTeleOpTurretZeroTicks";
 
     private RobotBlackboard() {
         // Constants and typed accessors only.

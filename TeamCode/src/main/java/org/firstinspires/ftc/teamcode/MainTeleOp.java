@@ -84,10 +84,6 @@ public class MainTeleOp extends OpMode {
      */
     private final Map<String, DcMotorEx> encoderPorts = new LinkedHashMap<>();
     private final Map<String, Integer> encoderPortStartTicks = new HashMap<>();
-    private final ToggleButton turretZeroToggle = new ToggleButton();
-    private final ToggleButton poseDefaultToggle = new ToggleButton();
-    private final ToggleButton poseAutoToggle = new ToggleButton();
-    private final ToggleButton poseResumeToggle = new ToggleButton();
 
     private boolean fieldCentric;
     private double fieldCentricOffsetRad;
@@ -121,8 +117,7 @@ public class MainTeleOp extends OpMode {
         follower = Constants.create(hardwareMap);
 
         // Start from where autonomous ended if one just ran, otherwise from the
-        // default start pose. The driver can change this on the init screen
-        // (see init_loop) because the turret aims from this pose all match.
+        // default start pose. The turret aims from this pose all match.
         Pose autoPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE);
         if (autoPose != null) {
             applyStartPose(autoPose, "FROM AUTO");
@@ -183,52 +178,15 @@ public class MainTeleOp extends OpMode {
      * Runs repeatedly between Init and Play. Nothing moves here: the turret
      * servos are still unpowered, so the turret can be turned by hand.
      *
-     * <ul>
-     *   <li>Shows the start pose the turret will aim from, and lets Gamepad 1
-     *       pick a different one. Each choice brings its turret zero with it:
-     *       Dpad Left = default start pose, turret zeroed where it points now;
-     *       Dpad Up = pose and turret zero from the last autonomous; Dpad Right
-     *       = pose and turret zero from the last TeleOp (for a restart in the
-     *       middle of a match).</li>
-     *   <li>Shows the LIVE turret angle and encoder ticks, so the encoder
-     *       direction and the zero can be checked before the servos get
-     *       power. Gamepad 2 Y re-zeroes the turret where it points now.</li>
-     * </ul>
+     * <p>Shows the start pose the turret will aim from and the LIVE turret
+     * angle and encoder ticks, so the encoder can be checked before the servos
+     * get power. No buttons do anything here: the start pose and the turret
+     * zero come from the autonomous that just ran, or (TeleOp started on its
+     * own) the default start pose and the turret zeroed where it points at Init.
      */
     @Override
     public void init_loop() {
-        // Each start-pose choice brings its matching turret zero with it.
-        if (poseDefaultToggle.update(gamepad1.dpad_left)) {
-            // Robot was placed by hand on the start tile: zero the turret where it
-            // points now (it must be straight forward).
-            applyStartPose(RobotConstants.Field.START_POSE, "DEFAULT START (driver chose)");
-            zeroTurretHere();
-        }
-        Pose autoPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE);
-        if (poseAutoToggle.update(gamepad1.dpad_up) && autoPose != null) {
-            applyStartPose(autoPose, "FROM AUTO");
-            restoreTurretZero(
-                    RobotBlackboard.getInteger(blackboard, RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS),
-                    "the last autonomous"
-            );
-        }
-        Pose teleOpPose = RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE);
-        if (poseResumeToggle.update(gamepad1.dpad_right) && teleOpPose != null) {
-            applyStartPose(teleOpPose, "LAST TELEOP (driver chose)");
-            // In a mid-match restart nobody can straighten the turret by hand, so
-            // it is probably NOT pointing forward now. The hub kept counting while
-            // TeleOp was stopped, so bring back the zero that TeleOp was using.
-            // Gamepad 2 Y still overrides it.
-            restoreTurretZero(
-                    RobotBlackboard.getInteger(blackboard, RobotBlackboard.LAST_TELEOP_TURRET_ZERO_TICKS),
-                    "the last TeleOp"
-            );
-        }
-
         if (turret != null) {
-            if (turretZeroToggle.update(gamepad2.y)) {
-                zeroTurretHere();
-            }
             // Read-only: updates the angle and ticks without powering the servos.
             turret.refresh();
         }
@@ -290,14 +248,6 @@ public class MainTeleOp extends OpMode {
         }
     }
 
-    /** Declares the turret's current direction to be straight forward. */
-    private void zeroTurretHere() {
-        if (turret != null) {
-            turret.resetAngle();
-            turretZeroKeptFrom = null;
-        }
-    }
-
     /**
      * Brings back a turret zero saved by an earlier OpMode, so the turret does not
      * have to be pointing forward now. Does nothing if there is no saved zero.
@@ -333,20 +283,13 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Start pose", startPoseSource);
         telemetry.addData("Start X / Y / Heading", "%.1f in / %.1f in / %.1f deg",
                 startPose.x(), startPose.y(), Math.toDegrees(startPose.heading()));
-        telemetry.addLine("  Is the robot REALLY there? If not: G1 Dpad Left = default start"
-                + (turret != null ? " + zero turret HERE" : "")
-                + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_AUTO_POSE) != null
-                        ? "  |  Dpad Up = auto pose + turret zero" : "")
-                + (RobotBlackboard.getPose(blackboard, RobotBlackboard.LAST_TELEOP_POSE) != null
-                        ? "  |  Dpad Right = last TeleOp pose + turret zero" : ""));
         if (turret != null) {
             addEncoderPortCheck();
             telemetry.addData("Turret measuredAngleDeg (live)", "%.1f", turret.getCurrentAngleDegrees());
             telemetry.addData("Turret ticks since zero (live)", turret.getTicksSinceZero());
             telemetry.addLine(turretZeroKeptFrom != null
-                    ? "  Turret zero KEPT from " + turretZeroKeptFrom
-                            + ": a non-zero angle is correct. G2 Y = zero it here instead."
-                    : "  Turret must point straight forward and read 0.0. G2 Y = zero it here.");
+                    ? "  Turret zero KEPT from " + turretZeroKeptFrom + ": a non-zero angle is correct."
+                    : "  Turret zero taken at Init: it must have been pointing straight forward then.");
             telemetry.addLine("  Check 1: turn the TURRET LEFT by hand (counterclockwise from above), angle must go UP."
                     + " If it goes DOWN, flip Turret.ENCODER_REVERSED.");
             telemetry.addLine("  Check 2: turn the TURRET ONE FULL TURN by hand, angle must read 360."
@@ -381,10 +324,8 @@ public class MainTeleOp extends OpMode {
      * sitting in init does not show up on the first loop.
      *
      * <p>The turret is NOT re-zeroed here. Its zero came from the autonomous
-     * that just ran, or was taken at Init or with Gamepad 2 Y on the init
-     * screen, or was restored with Gamepad 1 Dpad Right. The encoder has been
-     * counting ever since, so a turret that moved in between is still measured
-     * correctly.
+     * that just ran, or was taken at Init. The encoder has been counting ever
+     * since, so a turret that moved in between is still measured correctly.
      */
     @Override
     public void start() {
@@ -393,14 +334,6 @@ public class MainTeleOp extends OpMode {
         // TeleOp does not silently start from an old autonomous end pose.
         blackboard.remove(RobotBlackboard.LAST_AUTO_POSE);
         blackboard.remove(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS);
-        // Remember the turret zero this TeleOp runs with, next to the TeleOp pose,
-        // so a restart in the middle of a match can restore both.
-        if (turret != null) {
-            blackboard.put(
-                    RobotBlackboard.LAST_TELEOP_TURRET_ZERO_TICKS,
-                    turret.getZeroOffsetTicks()
-            );
-        }
     }
 
     /**
@@ -513,9 +446,6 @@ public class MainTeleOp extends OpMode {
         intake.update();
         outtake.update();
         follower.update();
-        // Remember where we are, so a TeleOp restart in the middle of a match
-        // can resume from here (Gamepad 1 Dpad Right on the init screen).
-        blackboard.put(RobotBlackboard.LAST_TELEOP_POSE, follower.pose());
         // Aim with the freshest localizer pose, every loop, no blocking.
         if (turret != null) {
             turret.update(follower.pose());
