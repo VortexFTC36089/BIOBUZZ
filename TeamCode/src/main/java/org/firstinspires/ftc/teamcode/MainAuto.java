@@ -46,6 +46,19 @@ public class MainAuto extends LinearOpMode {
         );
     }
 
+    /** Starts both the intake and transfer motors. */
+    public Command runIntakeAndTransfer() {
+        return instant(() -> {
+            intake.intake();
+            intake.transfer();
+        });
+    }
+
+    /** Stops both the intake and transfer motors. */
+    public Command stopIntakeAndTransfer() {
+        return instant(() -> intake.stop());
+    }
+
     /**
      * Shoots the balls currently held by the robot:
      * <ol>
@@ -63,7 +76,7 @@ public class MainAuto extends LinearOpMode {
      * <p>Use it inside {@link #autoRoutine()}, e.g. after a {@code follow(...)}.
      * The robot does not drive while this runs.
      */
-    public Command shootBalls() {
+    public Command TrackShootBalls() {
         return sequential(
                 instant(() -> outtake.outtake()),
                 race(
@@ -73,6 +86,26 @@ public class MainAuto extends LinearOpMode {
                 race(
                         waitUntil(() -> turret.isAimedAtTarget() || turret.hasEncoderFault()),
                         waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
+                ),
+                instant(() -> outtake.setGateOpen(true)),
+                waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
+                instant(() -> {
+                    intake.intake();
+                    intake.transfer();
+                }),
+                waitMs(RobotConstants.Auto.FEED_TIME_MS),
+                instant(() -> {
+                    intake.stop();
+                    outtake.stop();
+                })
+        );
+    }
+    public Command shootBalls() {
+        return sequential(
+                instant(() -> outtake.outtake()),
+                race(
+                        waitUntil(() -> outtake.atSpeed()),
+                        waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
