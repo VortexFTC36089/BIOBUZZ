@@ -244,7 +244,7 @@ public final class RobotConstants {
 
         public static final double RIGHT_KP = 63.0;
         public static final double RIGHT_KI = 0.0;
-        public static final double RIGHT_KD = 2.0;
+        public static final double RIGHT_KD = 0.0;
         public static final double RIGHT_KF = 12.83;
 
         /**
