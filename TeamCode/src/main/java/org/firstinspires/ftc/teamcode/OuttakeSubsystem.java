@@ -77,8 +77,8 @@ public class OuttakeSubsystem {
         // Dual opposing wheels typically spin opposite motor directions so both
         // push the game piece forward.
         // TODO(team): verify directions — positive RPM on both should score/eject
-        leftMotor.setDirection(DcMotorEx.Direction.REVERSE);
-        rightMotor.setDirection(DcMotorEx.Direction.FORWARD);
+        leftMotor.setDirection(DcMotorEx.Direction.FORWARD);
+        rightMotor.setDirection(DcMotorEx.Direction.REVERSE);
 
         // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
         // Each motor gets its own gains.

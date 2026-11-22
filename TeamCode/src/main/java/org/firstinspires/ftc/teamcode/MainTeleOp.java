@@ -51,7 +51,7 @@ public class MainTeleOp extends OpMode {
      * touched (no hardware lookup, no power), so TeleOp runs fine without
      * them configured.
      */
-    private static final boolean TURRET_ENABLED = true;
+    private static final boolean TURRET_ENABLED = false;
 
     /**
      * Set to {@code true} to bring back the two-position {@code flower} servo
@@ -589,10 +589,6 @@ public class MainTeleOp extends OpMode {
                 race(
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
-                ),
-                race(
-                        waitUntil(() -> turretReadyToShoot()),
-                        waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
