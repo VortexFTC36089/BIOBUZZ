@@ -51,7 +51,7 @@ public class MainTeleOp extends OpMode {
      * touched (no hardware lookup, no power), so TeleOp runs fine without
      * them configured.
      */
-    private static final boolean TURRET_ENABLED = false;
+    private static final boolean TURRET_ENABLED = true;
 
     /**
      * Set to {@code true} to bring back the two-position {@code flower} servo
@@ -59,7 +59,7 @@ public class MainTeleOp extends OpMode {
      * hardware lookup, no position command), so TeleOp runs fine without it
      * configured.
      */
-    private static final boolean FLOWER_SERVO_ENABLED = false;
+    private static final boolean FLOWER_SERVO_ENABLED = true;
 
     private Follower follower;
     private TurretSubsystem turret;
@@ -711,6 +711,12 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Outtake Motor", outtake.getMotorState());
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
+        telemetry.addData("Outtake Vbat / command (L/R)", "%.2f V / %.2f V, %.2f V",
+                outtake.getBatteryVoltage(), outtake.getLeftVoltageCommand(),
+                outtake.getRightVoltageCommand());
+        if (!outtake.getControllerFault().isEmpty()) {
+            telemetry.addData("Outtake controller fault", outtake.getControllerFault());
+        }
         telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
         telemetry.addData("Shoot balls", isShootActive() ? "RUNNING" : "OFF");
         telemetry.addData("Servo", servo == null

@@ -1,115 +1,62 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 /**
- * Dual-motor outtake subsystem using encoder velocity control (RPM) with the
- * hub's velocity PIDF, plus a manually controlled gate servo that holds game
- * pieces back from the flywheels.
+ * Dual-motor outtake controlled by custom voltage feedforward and proportional
+ * velocity feedback, with a manually controlled game-piece gate.
  *
- * <p>The gate is driven only by {@link #setGateOpen(boolean)}; it does not
- * check flywheel speed. {@link #stop()} closes it.
- *
- * <p>OpModes should call {@link #outtake()} (or {@link #setTargetRpm(double)})
- * or {@link #stopMotor()} / {@link #stop()}, then call {@link #update()} once
- * per loop so hardware outputs always match the requested state. The outtake
- * motors are one-way only and cannot reverse.
- *
- * <p>Hardware: two {@link DcMotorEx} motors with encoders named
- * {@link RobotConstants.Outtake#LEFT_MOTOR} and
- * {@link RobotConstants.Outtake#RIGHT_MOTOR}, and one positional servo named
- * {@link RobotConstants.Outtake#GATE_SERVO}.
+ * <p>Call {@link #update()} once per OpMode loop. The motors run in
+ * {@code RUN_WITHOUT_ENCODER}; encoder velocity is measured in ticks/second and
+ * converted to RPM using {@link RobotConstants.Outtake#TICKS_PER_REV}. This
+ * subsystem does not use the hub's velocity PIDF controller.
  */
 public class OuttakeSubsystem {
 
-    /**
-     * What the outtake motors are doing this loop, derived from the measured
-     * encoder RPM every {@link #update()}.
-     */
     public enum MotorState {
-        /** No RPM requested; motors unpowered. */
         OFF,
-        /** RPM requested but at least one motor is outside tolerance. */
         SPINNING_UP,
-        /** Both motors within {@link RobotConstants.Outtake#RPM_TOLERANCE} of target. */
         AT_SPEED
     }
 
     private final DcMotorEx leftMotor;
     private final DcMotorEx rightMotor;
     private final Servo gateServo;
+    private final HardwareMap hardwareMap;
 
     private boolean gateOpen;
     private boolean gateRequestedOpen;
-    private MotorState motorState;
+    private MotorState motorState = MotorState.OFF;
     private double targetRpm;
-    private double appliedLeftKp;
-    private double appliedLeftKi;
-    private double appliedLeftKd;
-    private double appliedLeftKf;
-    private double appliedRightKp;
-    private double appliedRightKi;
-    private double appliedRightKd;
-    private double appliedRightKf;
-
-    // Measured RPM, refreshed once per update() so every check in a loop
-    // iteration sees the same encoder sample.
     private double measuredLeftRpm;
     private double measuredRightRpm;
+    private double filteredLeftRpm;
+    private double filteredRightRpm;
+    private boolean velocityFilterInitialized;
+    private double batteryVoltage;
+    private double leftPowerCommand;
+    private double rightPowerCommand;
+    private double leftVoltageCommand;
+    private double rightVoltageCommand;
+    private String controllerFault = "";
 
-    /**
-     * Finds both outtake motors and puts them in a known-safe initial state
-     * (stopped in velocity mode with PIDF gains applied).
-     *
-     * @param hardwareMap FTC hardware map from the running OpMode
-     */
     public OuttakeSubsystem(HardwareMap hardwareMap) {
+        this.hardwareMap = hardwareMap;
         leftMotor = hardwareMap.get(DcMotorEx.class, RobotConstants.Outtake.LEFT_MOTOR);
         rightMotor = hardwareMap.get(DcMotorEx.class, RobotConstants.Outtake.RIGHT_MOTOR);
 
-        // Float so the flywheels spin down smoothly instead of slamming to a stop.
         leftMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
         rightMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
-
-        // Dual opposing wheels typically spin opposite motor directions so both
-        // push the game piece forward.
-        // TODO(team): verify directions — positive RPM on both should score/eject
         leftMotor.setDirection(DcMotorEx.Direction.FORWARD);
         rightMotor.setDirection(DcMotorEx.Direction.REVERSE);
-
-        // RUN_USING_ENCODER lets setVelocity() hold target RPM with the hub's PIDF.
-        // Each motor gets its own gains.
-        configureVelocityControl(leftMotor,
-                RobotConstants.Outtake.LEFT_KP,
-                RobotConstants.Outtake.LEFT_KI,
-                RobotConstants.Outtake.LEFT_KD,
-                RobotConstants.Outtake.LEFT_KF);
-        appliedLeftKp = RobotConstants.Outtake.LEFT_KP;
-        appliedLeftKi = RobotConstants.Outtake.LEFT_KI;
-        appliedLeftKd = RobotConstants.Outtake.LEFT_KD;
-        appliedLeftKf = RobotConstants.Outtake.LEFT_KF;
-        configureVelocityControl(rightMotor,
-                RobotConstants.Outtake.RIGHT_KP,
-                RobotConstants.Outtake.RIGHT_KI,
-                RobotConstants.Outtake.RIGHT_KD,
-                RobotConstants.Outtake.RIGHT_KF);
-        appliedRightKp = RobotConstants.Outtake.RIGHT_KP;
-        appliedRightKi = RobotConstants.Outtake.RIGHT_KI;
-        appliedRightKd = RobotConstants.Outtake.RIGHT_KD;
-        appliedRightKf = RobotConstants.Outtake.RIGHT_KF;
-
-        motorState = MotorState.OFF;
-        targetRpm = 0.0;
-        measuredLeftRpm = 0.0;
-        measuredRightRpm = 0.0;
-
+        leftMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        rightMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
         leftMotor.setPower(0.0);
         rightMotor.setPower(0.0);
 
-        // Start with the gate closed so nothing reaches the flywheels early.
         gateServo = hardwareMap.get(Servo.class, RobotConstants.Outtake.GATE_SERVO);
         gateOpen = false;
         gateRequestedOpen = false;
@@ -117,18 +64,12 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Requests the gate open ({@code true}) or closed ({@code false}). The gate
-     * is fully manual: it does not wait for the flywheels to be at speed.
-     *
-     * <p>Takes effect on the next {@link #update()}.</p>
-     *
-     * @param open {@code true} to open the gate, {@code false} to close it
+     * Requests the gate state. The change is applied on the next {@link #update()}.
      */
     public void setGateOpen(boolean open) {
         gateRequestedOpen = open;
     }
 
-    /** Moves the gate servo only when the requested state actually changes. */
     private void applyGate() {
         if (gateRequestedOpen == gateOpen) {
             return;
@@ -139,193 +80,243 @@ public class OuttakeSubsystem {
                 : RobotConstants.Outtake.GATE_CLOSED_POSITION);
     }
 
-    private void configureVelocityControl(DcMotorEx motor, double kP, double kI, double kD, double kF) {
-        motor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
-        motor.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        motor.setVelocityPIDFCoefficients(kP, kI, kD, kF);
-    }
-
-    /**
-     * Spins both outtake motors up to {@link RobotConstants.Outtake#TARGET_RPM}.
-     *
-     * <p>Takes effect on the next {@link #update()}.</p>
-     */
+    /** Uses the dashboard-configurable default target RPM. */
     public void outtake() {
         setTargetRpm(RobotConstants.Outtake.TARGET_RPM);
     }
 
     /**
-     * Spins both outtake motors up to a specific non-negative RPM. Negative
-     * values are clamped to {@code 0.0} so the outtake never reverses.
-     *
-     * <p>Takes effect on the next {@link #update()}.</p>
-     *
-     * @param rpm target output RPM (positive to outtake, {@code <= 0} to stop)
+     * Requests a non-negative flywheel speed. Negative values stop the wheels;
+     * non-finite values are rejected rather than being allowed into the controller.
      */
     public void setTargetRpm(double rpm) {
-        if (rpm > 0.0) {
-            targetRpm = rpm;
-            // Assume we are not yet at speed; update() confirms from encoders.
-            if (motorState == MotorState.OFF) {
-                motorState = MotorState.SPINNING_UP;
-            }
-        } else {
-            targetRpm = 0.0;
-            motorState = MotorState.OFF;
+        if (Double.isNaN(rpm) || Double.isInfinite(rpm)) {
+            throw new IllegalArgumentException("Target RPM must be finite");
+        }
+        targetRpm = Math.max(0.0, rpm);
+        motorState = targetRpm > 0.0 ? MotorState.SPINNING_UP : MotorState.OFF;
+        if (targetRpm == 0.0) {
+            setMotorPowers(0.0, 0.0);
         }
     }
 
-    /**
-     * Requests zero RPM on both outtake motors.
-     *
-     * <p>Takes effect on the next {@link #update()}.</p>
-     */
+    /** Immediately removes motor power without waiting for another OpMode loop. */
     public void stopMotor() {
-        setTargetRpm(0.0);
+        targetRpm = 0.0;
+        motorState = MotorState.OFF;
+        setMotorPowers(0.0, 0.0);
     }
 
-    /**
-     * Stops both outtake motors and closes the gate. Always safe to call from
-     * OpMode {@code stop()}.
-     *
-     * <p>Takes effect on the next {@link #update()}.</p>
-     */
+    /** Immediately stops both flywheels and closes the gate. */
     public void stop() {
         stopMotor();
-        setGateOpen(false);
+        gateRequestedOpen = false;
+        applyGate();
     }
 
     /**
-     * Reads both encoders, re-commands the target velocity (ticks/sec), and
-     * refreshes {@link #getMotorState()} from the measured RPM.
-     *
-     * <p>Call once per OpMode loop.</p>
+     * Samples encoders and battery voltage, updates the custom controller, and
+     * writes both motor powers. Call once per OpMode loop.
      */
     public void update() {
-        updateVelocityPidfIfChanged();
-
-        // 0. Gate: follow the manual request, independent of flywheel state.
         applyGate();
 
-        // 1. Measure: sample both encoders once per loop.
-        measuredLeftRpm = ticksPerSecToRpm(leftMotor.getVelocity());
-        measuredRightRpm = ticksPerSecToRpm(rightMotor.getVelocity());
-
-        // 2. Command: hold target RPM via the hub's velocity PIDF, or coast.
-        if (targetRpm <= 0.0) {
-            leftMotor.setPower(0.0);
-            rightMotor.setPower(0.0);
-            motorState = MotorState.OFF;
+        double ticksPerRev = RobotConstants.Outtake.TICKS_PER_REV;
+        double alpha = OuttakeControllerConfig.VELOCITY_FILTER_ALPHA;
+        if (!isFinitePositive(ticksPerRev)
+                || !isFinitePositive(alpha)
+                || alpha > 1.0) {
+            failSafe("TICKS_PER_REV must be positive and filter alpha must be in (0, 1]");
+            measuredLeftRpm = 0.0;
+            measuredRightRpm = 0.0;
             return;
         }
 
-        double ticksPerSec = rpmToTicksPerSec(targetRpm);
-        leftMotor.setVelocity(ticksPerSec);
-        rightMotor.setVelocity(ticksPerSec);
-
-        // 3. Check: both motors must be inside tolerance to count as at speed.
-        boolean leftOk = Math.abs(measuredLeftRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
-        boolean rightOk = Math.abs(measuredRightRpm - targetRpm) <= RobotConstants.Outtake.RPM_TOLERANCE;
-        motorState = (leftOk && rightOk) ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
-    }
-
-    private void updateVelocityPidfIfChanged() {
-        double leftKp = RobotConstants.Outtake.LEFT_KP;
-        double leftKi = RobotConstants.Outtake.LEFT_KI;
-        double leftKd = RobotConstants.Outtake.LEFT_KD;
-        double leftKf = RobotConstants.Outtake.LEFT_KF;
-        if (leftKp != appliedLeftKp || leftKi != appliedLeftKi
-                || leftKd != appliedLeftKd || leftKf != appliedLeftKf) {
-            leftMotor.setVelocityPIDFCoefficients(leftKp, leftKi, leftKd, leftKf);
-            appliedLeftKp = leftKp;
-            appliedLeftKi = leftKi;
-            appliedLeftKd = leftKd;
-            appliedLeftKf = leftKf;
+        measuredLeftRpm = ticksPerSecToRpm(leftMotor.getVelocity(), ticksPerRev);
+        measuredRightRpm = ticksPerSecToRpm(rightMotor.getVelocity(), ticksPerRev);
+        if (!isFinite(measuredLeftRpm) || !isFinite(measuredRightRpm)) {
+            failSafe("Encoder velocity is not finite");
+            return;
         }
 
-        double rightKp = RobotConstants.Outtake.RIGHT_KP;
-        double rightKi = RobotConstants.Outtake.RIGHT_KI;
-        double rightKd = RobotConstants.Outtake.RIGHT_KD;
-        double rightKf = RobotConstants.Outtake.RIGHT_KF;
-        if (rightKp != appliedRightKp || rightKi != appliedRightKi
-                || rightKd != appliedRightKd || rightKf != appliedRightKf) {
-            rightMotor.setVelocityPIDFCoefficients(rightKp, rightKi, rightKd, rightKf);
-            appliedRightKp = rightKp;
-            appliedRightKi = rightKi;
-            appliedRightKd = rightKd;
-            appliedRightKf = rightKf;
+        if (!velocityFilterInitialized) {
+            filteredLeftRpm = measuredLeftRpm;
+            filteredRightRpm = measuredRightRpm;
+            velocityFilterInitialized = true;
+        } else {
+            filteredLeftRpm = alpha * measuredLeftRpm + (1.0 - alpha) * filteredLeftRpm;
+            filteredRightRpm = alpha * measuredRightRpm + (1.0 - alpha) * filteredRightRpm;
         }
+
+        if (targetRpm <= 0.0) {
+            controllerFault = "";
+            motorState = MotorState.OFF;
+            setMotorPowers(0.0, 0.0);
+            return;
+        }
+
+        if (!validControllerConfiguration()) {
+            failSafe("Invalid Ks/Kv/Kp or maximum-output setting");
+            return;
+        }
+
+        batteryVoltage = readBatteryVoltage();
+        if (!isFinitePositive(batteryVoltage)) {
+            failSafe("No valid battery voltage reading");
+            return;
+        }
+
+        double leftVolts = calculateCommandVoltage(
+                OuttakeControllerConfig.LEFT_KS_VOLTS,
+                OuttakeControllerConfig.LEFT_KV_VOLTS_PER_RPM,
+                OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM,
+                filteredLeftRpm);
+        double rightVolts = calculateCommandVoltage(
+                OuttakeControllerConfig.RIGHT_KS_VOLTS,
+                OuttakeControllerConfig.RIGHT_KV_VOLTS_PER_RPM,
+                OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM,
+                filteredRightRpm);
+        if (!isFinite(leftVolts) || !isFinite(rightVolts)) {
+            failSafe("Controller voltage calculation is not finite");
+            return;
+        }
+
+        double maxPower = OuttakeControllerConfig.MAX_OUTPUT;
+        leftPowerCommand = clip(leftVolts / batteryVoltage, 0.0, maxPower);
+        rightPowerCommand = clip(rightVolts / batteryVoltage, 0.0, maxPower);
+        leftVoltageCommand = leftPowerCommand * batteryVoltage;
+        rightVoltageCommand = rightPowerCommand * batteryVoltage;
+        leftMotor.setPower(leftPowerCommand);
+        rightMotor.setPower(rightPowerCommand);
+
+        double tolerance = RobotConstants.Outtake.RPM_TOLERANCE;
+        boolean atSpeed = isFinite(tolerance) && tolerance >= 0.0
+                && Math.abs(filteredLeftRpm - targetRpm) <= tolerance
+                && Math.abs(filteredRightRpm - targetRpm) <= tolerance;
+        motorState = atSpeed ? MotorState.AT_SPEED : MotorState.SPINNING_UP;
+        controllerFault = "";
     }
 
-    /**
-     * @return {@code true} if the gate servo is commanded open
-     */
+    private boolean validControllerConfiguration() {
+        return isFiniteNonNegative(OuttakeControllerConfig.LEFT_KS_VOLTS)
+                && isFiniteNonNegative(OuttakeControllerConfig.LEFT_KV_VOLTS_PER_RPM)
+                && isFiniteNonNegative(OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM)
+                && isFiniteNonNegative(OuttakeControllerConfig.RIGHT_KS_VOLTS)
+                && isFiniteNonNegative(OuttakeControllerConfig.RIGHT_KV_VOLTS_PER_RPM)
+                && isFiniteNonNegative(OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM)
+                && isFinite(OuttakeControllerConfig.MAX_OUTPUT)
+                && OuttakeControllerConfig.MAX_OUTPUT >= 0.0
+                && OuttakeControllerConfig.MAX_OUTPUT <= 1.0;
+    }
+
+    private double calculateCommandVoltage(double kS, double kV, double kP, double actualRpm) {
+        double feedforwardVolts = kS + kV * targetRpm;
+        double feedbackVolts = kP * (targetRpm - actualRpm);
+        return feedforwardVolts + feedbackVolts;
+    }
+
+    private double readBatteryVoltage() {
+        double lowestValidVoltage = Double.POSITIVE_INFINITY;
+        for (VoltageSensor sensor : hardwareMap.getAll(VoltageSensor.class)) {
+            double voltage = sensor.getVoltage();
+            if (isFinitePositive(voltage) && voltage < lowestValidVoltage) {
+                lowestValidVoltage = voltage;
+            }
+        }
+        return lowestValidVoltage == Double.POSITIVE_INFINITY ? 0.0 : lowestValidVoltage;
+    }
+
+    private void failSafe(String reason) {
+        controllerFault = reason;
+        motorState = targetRpm > 0.0 ? MotorState.SPINNING_UP : MotorState.OFF;
+        setMotorPowers(0.0, 0.0);
+    }
+
+    private void setMotorPowers(double leftPower, double rightPower) {
+        leftPowerCommand = leftPower;
+        rightPowerCommand = rightPower;
+        leftVoltageCommand = leftPower * batteryVoltage;
+        rightVoltageCommand = rightPower * batteryVoltage;
+        leftMotor.setPower(leftPower);
+        rightMotor.setPower(rightPower);
+    }
+
+    private static double ticksPerSecToRpm(double ticksPerSec, double ticksPerRev) {
+        return ticksPerSec * 60.0 / ticksPerRev;
+    }
+
+    private static boolean isFinite(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
+    }
+
+    private static boolean isFinitePositive(double value) {
+        return isFinite(value) && value > 0.0;
+    }
+
+    private static boolean isFiniteNonNegative(double value) {
+        return isFinite(value) && value >= 0.0;
+    }
+
+    private static double clip(double value, double minimum, double maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
     public boolean isGateOpen() {
         return gateOpen;
     }
 
-    private static double rpmToTicksPerSec(double rpm) {
-        return rpm * RobotConstants.Outtake.TICKS_PER_REV / 60.0;
-    }
-
-    private static double ticksPerSecToRpm(double ticksPerSec) {
-        return ticksPerSec * 60.0 / RobotConstants.Outtake.TICKS_PER_REV;
-    }
-
-    /**
-     * @return the requested target RPM
-     */
     public double getTargetRpm() {
         return targetRpm;
     }
 
-    /**
-     * @return left outtake motor RPM measured in the last {@link #update()}
-     */
     public double getLeftRpm() {
         return measuredLeftRpm;
     }
 
-    /**
-     * @return right outtake motor RPM measured in the last {@link #update()}
-     */
     public double getRightRpm() {
         return measuredRightRpm;
     }
 
-    /**
-     * @return average measured outtake RPM across both motors
-     */
     public double getCurrentRpm() {
         return (measuredLeftRpm + measuredRightRpm) / 2.0;
     }
 
-    /**
-     * @return signed RPM error (target minus measured) of the left motor
-     */
     public double getLeftRpmError() {
         return targetRpm - measuredLeftRpm;
     }
 
-    /**
-     * @return signed RPM error (target minus measured) of the right motor
-     */
     public double getRightRpmError() {
         return targetRpm - measuredRightRpm;
     }
 
-    /**
-     * @return {@code true} if spinning and, as of the last {@link #update()},
-     *         both motors were within {@link RobotConstants.Outtake#RPM_TOLERANCE}
-     *         of {@link #getTargetRpm()}
-     */
+    public double getLeftPowerCommand() {
+        return leftPowerCommand;
+    }
+
+    public double getRightPowerCommand() {
+        return rightPowerCommand;
+    }
+
+    public double getLeftVoltageCommand() {
+        return leftVoltageCommand;
+    }
+
+    public double getRightVoltageCommand() {
+        return rightVoltageCommand;
+    }
+
+    public double getBatteryVoltage() {
+        return batteryVoltage;
+    }
+
+    public String getControllerFault() {
+        return controllerFault;
+    }
+
     public boolean atSpeed() {
         return motorState == MotorState.AT_SPEED;
     }
 
-    /**
-     * @return current motor state ({@code OFF}, {@code SPINNING_UP}, or {@code AT_SPEED})
-     */
     public MotorState getMotorState() {
         return motorState;
     }
