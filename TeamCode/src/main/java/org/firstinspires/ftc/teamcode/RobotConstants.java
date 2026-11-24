@@ -639,6 +639,13 @@ public final class RobotConstants {
 
         /** Angle error deadband (radians) within which the turret counts as aimed. */
         public static final double ANGLE_TOLERANCE_RADIANS = Math.toRadians(1.0);
+
+        /**
+         * Once aimed on a stationary target, the turret stays still until the error exceeds this.
+         * Must be larger than ANGLE_TOLERANCE_RADIANS. It has to be wider than ONE correction kick:
+         * the degrees the turret moves in one loop at MIN_COMMAND_POWER, plus about 1 degree.
+         */
+        public static final double ANGLE_EXIT_TOLERANCE_RADIANS = Math.toRadians(2.0);
     }
 
     /**
