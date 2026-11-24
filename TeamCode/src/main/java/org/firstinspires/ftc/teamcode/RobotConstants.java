@@ -156,14 +156,14 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static double TRANSFER_TARGET_RPM = 5000.0;
+        public static double TRANSFER_TARGET_RPM = 3000.0;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
          * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
          */
         // TODO(team): tune transfer velocity PIDF gains on the robot
-        public static double TRANSFER_KP = 50.0;
+        public static double TRANSFER_KP = 40.0;
         public static double TRANSFER_KI = 0.0;
         public static double TRANSFER_KD = 0.5;
         public static double TRANSFER_KF = 10.0;
@@ -207,7 +207,8 @@ public final class RobotConstants {
      * Hardware map names and flywheel RPM settings for the dual-motor outtake
      * mechanism.
      *
-     * <p>Both outtake motors use encoder velocity control to hold a target RPM.
+     * <p>Both outtake motors use custom voltage feedforward and proportional
+     * velocity feedback to hold a target RPM.
      */
     @Configurable
     public static final class Outtake {
@@ -215,42 +216,24 @@ public final class RobotConstants {
         public static final String RIGHT_MOTOR = "outtake_right";
 
         /**
-         * Encoder ticks per output revolution. 28 is a bare goBILDA/REV
-         * motor; multiply by the gear ratio if there is a gearbox.
+         * Encoder ticks per flywheel revolution. 28 is the current assumption
+         * for a bare goBILDA motor with no external reduction; verify it against
+         * the exact motor's encoder specification before relying on RPM values.
          */
-        // TODO(team): set for the real outtake motor / gearbox
+        // TODO(team): verify the SDK encoder ticks per revolution for the exact motor
         public static double TICKS_PER_REV = 28.0;
 
         /**
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static double TARGET_RPM = 2450;
+        public static double TARGET_RPM = 2150;
+        /** Alternate target used by the outtake tuning OpMode; tune for the second shot mode. */
+        public static double SECONDARY_TARGET_RPM = 1300;
         /**
          * How close actual RPM must be to target to count as at speed.
          */
         public static double RPM_TOLERANCE = 100.0;
-
-        /**
-         * Velocity PIDF coefficients applied to the outtake motors in
-         * {@code RUN_USING_ENCODER} mode via {@code DcMotorEx.setVelocityPIDFCoefficients()}.
-         *
-         * <p>For a flywheel, feedforward ({@code F}) does most of the work to hold
-         * steady-state RPM, and proportional ({@code P}) helps recover speed quickly
-         * after a game piece is launched.
-         *
-         * <p>Each motor has its own set so the two flywheels can be tuned separately.
-         */
-        // TODO(team): tune velocity PIDF gains on the robot (use "Test: Motor PIDF Finder")
-        public static double LEFT_KP = 173.0;
-        public static double LEFT_KI = 0.0;
-        public static double LEFT_KD = 1.0;
-        public static double LEFT_KF = 10.0;
-
-        public static double RIGHT_KP = 173.0;
-        public static double RIGHT_KI = 0.0;
-        public static double RIGHT_KD = 1.0;
-        public static double RIGHT_KF = 10.0;
 
         /**
          * Gate servo that holds game pieces back from the flywheels. It is
@@ -259,8 +242,8 @@ public final class RobotConstants {
          */
         public static final String GATE_SERVO = "outtake_gate";
         // TODO(team): set both gate positions on the robot (0.0 to 1.0)
-        public static double GATE_CLOSED_POSITION = 0;
-        public static double GATE_OPEN_POSITION = .212;
+        public static double GATE_CLOSED_POSITION = .5;
+        public static double GATE_OPEN_POSITION = .72;
     }
 
 
@@ -547,21 +530,18 @@ public final class RobotConstants {
         public static final double HOME_ANGLE_RADIANS = 0.0;
 
         /**
-         * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
-         * means the turret spins without limit and always takes the shortest path to the
-         * target. Set back to {@code true} if any cable can wrap around the turret.
+         * Chassis speed deadbands used to detect when the robot is moving for turret
+         * position holding. Defaults are 0.5 in/s linear and 0.05 rad/s angular; raise
+         * these if odometry jitter prevents a stopped robot from settling.
          */
-        public static final boolean USE_SOFT_LIMITS = false;
+        public static double ROBOT_LINEAR_SPEED_THRESHOLD_IN_PER_SEC = 0.5;
+        public static double ROBOT_ANGULAR_SPEED_THRESHOLD_RAD_PER_SEC = 0.05;
 
         /**
-         * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
-         * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
+         * Time the chassis must remain below both motion deadbands before the turret
+         * latches its current chassis-relative angle. Default: 0.15 seconds.
          */
-        // TODO(team): measure safe mechanical rotation limits in degrees
-        public static final double MIN_ANGLE_DEGREES = -180.0;
-        public static final double MAX_ANGLE_DEGREES = 180.0;
-        public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
-        public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
+        public static double ROBOT_STOP_DEBOUNCE_SECONDS = 0.15;
 
         /**
          * Servo power cap in [0, 1], and the power used for the fast part of every move
@@ -576,7 +556,7 @@ public final class RobotConstants {
          * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
          */
         // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
-        public static final double MAX_POWER = 0.9;
+        public static final double MAX_POWER = 1.0;
 
         /**
          * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
@@ -675,13 +655,13 @@ public final class RobotConstants {
          * First pose. Used at init so the mechanism starts in a known place.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_A = 0.3;
+        public static final double POSITION_A = 1;
 
         /**
          * Second pose.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_B = 1;
+        public static final double POSITION_B = .57;
     }
 
     /**
@@ -694,11 +674,11 @@ public final class RobotConstants {
 
         /** Time given to the gate servo to finish opening before balls are fed. */
         // TODO(team): tune on the robot
-        public static final double GATE_OPEN_WAIT_MS = 300.0;
+        public static final double GATE_OPEN_WAIT_MS = 500.0;
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 0500.0;
+        public static final double FEED_TIME_MS = 0800.0;
     }
 
     /**

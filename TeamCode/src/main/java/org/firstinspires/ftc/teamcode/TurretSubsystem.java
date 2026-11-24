@@ -145,6 +145,8 @@ public class TurretSubsystem {
     private final DcMotorEx turretEncoder;
     private final PIDFController pidfController;
     private final ElapsedTime targetVelTimer = new ElapsedTime();
+    private final ElapsedTime robotMotionTimer = new ElapsedTime();
+    private final ElapsedTime robotStopTimer = new ElapsedTime();
 
     /** High-level turret operating mode. */
     public enum TurretMode {
@@ -209,16 +211,20 @@ public class TurretSubsystem {
     private double xOffsetInches = RobotConstants.Turret.OFFSET_X_INCHES;
     private double yOffsetInches = RobotConstants.Turret.OFFSET_Y_INCHES;
 
+    private double previousRobotX = 0.0;
+    private double previousRobotY = 0.0;
+    private double previousRobotHeading = 0.0;
+    private boolean hasPreviousRobotPose = false;
+    private boolean robotMotionInitialized = false;
+    private boolean robotMoving = false;
+    private boolean positionHoldActive = false;
+    private double lockedAngleRad = 0.0;
+
     // Encoder zero. Stored as an offset instead of resetting the hub encoder, because the
     // encoder shares its port with a real motor and because this makes resetAngle() cheap
     // and safe to call at any time.
     private int zeroOffsetTicks = 0;
     private int lastEncoderTicks = 0;
-
-    // Rotation soft limits (prevent wire binding)
-    private boolean useSoftLimits = RobotConstants.Turret.USE_SOFT_LIMITS;
-    private double minAngleRadians = RobotConstants.Turret.MIN_ANGLE_RADIANS;
-    private double maxAngleRadians = RobotConstants.Turret.MAX_ANGLE_RADIANS;
 
     // Field target (hive) in Pedro Pathing inches
     private double targetXInches = RobotConstants.Turret.DEFAULT_TARGET_X_INCHES;
@@ -366,8 +372,8 @@ public class TurretSubsystem {
 
     /**
      * Reads the encoder and converts ticks to a chassis-relative turret angle.
-     * The result is continuous (it keeps counting past +/- PI), which is what the
-     * soft limits need; {@link #driveToRelativeAngle} wraps the ERROR, not the angle.
+     * The result is continuous (it keeps counting past +/- PI); closed-loop commands
+     * use the shortest wrapped error to reach the target.
      */
     private double readAngleRadians() {
         int rawTicks = readRawTicks();
@@ -391,8 +397,24 @@ public class TurretSubsystem {
      * @param currentPose current robot {@link Pose} from Pedro Pathing
      */
     public void update(Pose currentPose) {
+        updateInternal(currentPose, null);
+    }
+
+    /**
+     * Call once per loop, optionally supplying drivetrain motion state instead of
+     * estimating it from pose deltas.
+     *
+     * @param currentPose current robot {@link Pose} from Pedro Pathing
+     * @param isRobotMoving true while the chassis is moving
+     */
+    public void update(Pose currentPose, boolean isRobotMoving) {
+        updateInternal(currentPose, isRobotMoving);
+    }
+
+    private void updateInternal(Pose currentPose, Boolean explicitRobotMoving) {
         currentAngleRad = readAngleRadians();
         monitorTurret();
+        updateRobotMotion(currentPose, explicitRobotMoving);
 
         if (!enabled || mode == TurretMode.DISABLED) {
             stop();
@@ -403,14 +425,7 @@ public class TurretSubsystem {
         // the operator's way to move the turret when the encoder is not working.
         if (mode == TurretMode.MANUAL) {
             onTarget = false;
-            double power = manualPower;
-            if (useSoftLimits) {
-                if ((currentAngleRad >= maxAngleRadians && power > 0.0)
-                        || (currentAngleRad <= minAngleRadians && power < 0.0)) {
-                    power = 0.0;
-                }
-            }
-            setServoPower(Range.clip(power, -RobotConstants.Turret.MAX_POWER,
+            setServoPower(Range.clip(manualPower, -RobotConstants.Turret.MAX_POWER,
                     RobotConstants.Turret.MAX_POWER));
             return;
         }
@@ -429,6 +444,11 @@ public class TurretSubsystem {
 
         if (currentPose == null) {
             stop();
+            return;
+        }
+
+        if (positionHoldActive) {
+            driveToRelativeAngle(lockedAngleRad);
             return;
         }
 
@@ -452,13 +472,69 @@ public class TurretSubsystem {
         driveToRelativeAngle(relativeTargetAngle);
     }
 
-    private void driveToRelativeAngle(double relativeTargetAngle) {
-        targetClipped = false;
-        if (useSoftLimits) {
-            double clipped = Range.clip(relativeTargetAngle, minAngleRadians, maxAngleRadians);
-            targetClipped = Math.abs(clipped - relativeTargetAngle) > 1e-9;
-            relativeTargetAngle = clipped;
+    private void updateRobotMotion(Pose currentPose, Boolean explicitRobotMoving) {
+        double dt = robotMotionTimer.seconds();
+        robotMotionTimer.reset();
+
+        boolean estimatedMoving = false;
+        if (currentPose != null) {
+            if (hasPreviousRobotPose && dt > 1e-4) {
+                double linearSpeed = Math.hypot(
+                        currentPose.x() - previousRobotX,
+                        currentPose.y() - previousRobotY) / dt;
+                double angularSpeed = Math.abs(AngleUnit.normalizeRadians(
+                        currentPose.heading() - previousRobotHeading)) / dt;
+                estimatedMoving = linearSpeed
+                        > RobotConstants.Turret.ROBOT_LINEAR_SPEED_THRESHOLD_IN_PER_SEC
+                        || angularSpeed
+                        > RobotConstants.Turret.ROBOT_ANGULAR_SPEED_THRESHOLD_RAD_PER_SEC;
+            }
+            previousRobotX = currentPose.x();
+            previousRobotY = currentPose.y();
+            previousRobotHeading = currentPose.heading();
+            hasPreviousRobotPose = true;
         }
+
+        boolean moving = explicitRobotMoving != null ? explicitRobotMoving : estimatedMoving;
+        robotMoving = moving;
+        if (mode != TurretMode.TRACKING) {
+            positionHoldActive = false;
+            robotMotionInitialized = false;
+            return;
+        }
+        if (currentPose == null) {
+            if (moving && positionHoldActive) {
+                firstTargetSample = true;
+            }
+            positionHoldActive = false;
+            robotMotionInitialized = false;
+            robotStopTimer.reset();
+            return;
+        }
+
+        if (moving) {
+            robotStopTimer.reset();
+            robotMotionInitialized = true;
+            if (positionHoldActive) {
+                positionHoldActive = false;
+                firstTargetSample = true;
+            }
+        } else {
+            if (!robotMotionInitialized) {
+                robotStopTimer.reset();
+                robotMotionInitialized = true;
+            }
+            if (!positionHoldActive
+                    && robotStopTimer.seconds()
+                            >= RobotConstants.Turret.ROBOT_STOP_DEBOUNCE_SECONDS) {
+                lockedAngleRad = currentAngleRad;
+                positionHoldActive = true;
+                firstTargetSample = true;
+            }
+        }
+    }
+
+    private void driveToRelativeAngle(double relativeTargetAngle) {
         relativeTargetAngleRad = relativeTargetAngle;
 
         // Target angular velocity (rad/s) for kV feedforward. It is capped at the turret's
@@ -487,16 +563,6 @@ public class TurretSubsystem {
         // Shortest path from the measured angle to the target, across +/- PI and after
         // any number of full revolutions.
         angleErrorRad = AngleUnit.normalizeRadians(relativeTargetAngleRad - currentAngleRad);
-
-        // Don't let the shortest path cross the mechanical limits (cable wrap)
-        if (useSoftLimits) {
-            double unwrappedTarget = currentAngleRad + angleErrorRad;
-            if (unwrappedTarget > maxAngleRadians) {
-                angleErrorRad -= 2.0 * Math.PI;
-            } else if (unwrappedTarget < minAngleRadians) {
-                angleErrorRad += 2.0 * Math.PI;
-            }
-        }
 
         onTarget = Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS;
 
@@ -541,14 +607,6 @@ public class TurretSubsystem {
                 }
                 // else: moving target and the controller asks for the other direction
                 // (velocity feedforward). Leave that command alone.
-            }
-        }
-
-        // Hard cutoff if already at/beyond a soft limit and still pushing outward
-        if (useSoftLimits) {
-            if ((currentAngleRad >= maxAngleRadians && power > 0.0)
-                    || (currentAngleRad <= minAngleRadians && power < 0.0)) {
-                power = 0.0;
             }
         }
 
@@ -906,6 +964,9 @@ public class TurretSubsystem {
             pidfController.reset();
             firstTargetSample = true;
             onTarget = false;
+            positionHoldActive = false;
+            robotMotionInitialized = false;
+            robotStopTimer.reset();
             restartMonitor();
             if (mode == TurretMode.TRACKING) {
                 // Entering TRACKING: pick the hive side fresh from where the robot is now.
@@ -969,12 +1030,6 @@ public class TurretSubsystem {
     public void setGains(double kI, double kD, double kV, double kF) {
         this.kV = kV;
         this.pidfController.setGains(kI, kD, kF);
-    }
-
-    public void setSoftLimitsDegrees(boolean useSoftLimits, double minDegrees, double maxDegrees) {
-        this.useSoftLimits = useSoftLimits;
-        this.minAngleRadians = Math.toRadians(minDegrees);
-        this.maxAngleRadians = Math.toRadians(maxDegrees);
     }
 
     public void setMountingOffset(double xOffsetInches, double yOffsetInches) {
@@ -1159,10 +1214,10 @@ public class TurretSubsystem {
 
     /**
      * @return true only if the turret is TRACKING the field target, the last
-     *         {@link #update(Pose)} measured it within tolerance, and the aim angle did
-     *         not have to be clipped to a soft limit. This is the "safe to shoot" check.
+     *         {@link #update(Pose)} measured it within tolerance. This is the
+     *         "safe to shoot" check.
      */
     public boolean isAimedAtTarget() {
-        return enabled && !encoderFault && mode == TurretMode.TRACKING && onTarget && !targetClipped;
+        return enabled && !encoderFault && mode == TurretMode.TRACKING && onTarget;
     }
 }
