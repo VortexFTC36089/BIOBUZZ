@@ -34,6 +34,25 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  * Driver Station when the count does not follow. MANUAL jog is open-loop and keeps
  * working without the encoder.
  *
+ * <h3>Settling (no jitter at the target)</h3>
+ * The turret has a minimum correction power (a servo cannot move at less than its dead
+ * zone), so a correction is always a fixed-size kick no matter how small the error is.
+ * With a single tolerance that kick can carry the turret across the whole tolerance band
+ * and the turret then kicks back, again and again. The aimed state therefore has
+ * HYSTERESIS: the turret stops once it is inside
+ * {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and stays stopped until the error
+ * grows beyond {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}. The wider exit
+ * band applies only while the target is NOT moving: while the chassis is turning or driving
+ * past the hive the tight tolerance applies in both directions, so tracking stays as tight
+ * as before. The "target is moving" test has hysteresis too, so a target speed that hovers
+ * around the threshold does not toggle between feedforward and no power every few loops.
+ *
+ * <p>The hysteresis cannot help if ONE correction kick (the speed at
+ * {@link RobotConstants.Turret#MIN_COMMAND_POWER} times the loop period, plus coast) is
+ * larger than the exit band: the turret then still jumps from one side of the band to the
+ * other. In that case make the kick smaller (lower MIN_COMMAND_POWER, shorter loop) or widen
+ * the exit tolerance.
+ *
  * <h3>Zero</h3>
  * The encoder is relative, so "0" is wherever the turret points when this object is
  * created (OpMode INIT) or when {@link #resetAngle()} is called, and the turret must be
@@ -237,6 +256,14 @@ public class TurretSubsystem {
     private double targetAngularVelocityRadSec = 0.0; // low-pass filtered
     private double rawTargetVelocityRadSec = 0.0;     // unfiltered, this loop only
     private boolean firstTargetSample = true;
+    /**
+     * Latched "target is moving" flag, with hysteresis: it turns on above
+     * {@link RobotConstants.Turret#TARGET_MOVING_THRESHOLD_RAD_SEC} and only turns off
+     * again below half of that. A filtered target speed that hovers around a single
+     * threshold would otherwise switch the on-target output between zero power and
+     * feedforward every few loops.
+     */
+    private boolean targetMovingLatched = false;
     private boolean enabled = true;
 
     private double currentAngleRad = 0.0;
@@ -245,7 +272,12 @@ public class TurretSubsystem {
     private double angleErrorRad = 0.0;
     private double lastCommandedPower = 0.0;
 
-    /** True only while the last update() measured the turret inside tolerance. */
+    /**
+     * True while the turret counts as aimed. Has hysteresis: it turns on inside
+     * {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and, while the target is not
+     * moving, stays on until the error exceeds
+     * {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}.
+     */
     private boolean onTarget = false;
     /** True if the last commanded angle had to be clipped to a soft limit. */
     private boolean targetClipped = false;
@@ -293,6 +325,8 @@ public class TurretSubsystem {
         zeroOffsetTicks = readRawTicks();
         lastEncoderTicks = zeroOffsetTicks;
         currentAngleRad = 0.0;
+        // The aimed state belongs to the old zero: let the next update() decide it again.
+        onTarget = false;
         restartMonitor();
     }
 
@@ -325,6 +359,8 @@ public class TurretSubsystem {
     public void restoreZero(int zeroTicks) {
         zeroOffsetTicks = zeroTicks;
         currentAngleRad = readAngleRadians();
+        // The aimed state belongs to the old zero: let the next update() decide it again.
+        onTarget = false;
         restartMonitor();
     }
 
@@ -481,8 +517,14 @@ public class TurretSubsystem {
             rawTargetVelocityRadSec = 0.0;
         }
         previousTargetAngleRad = relativeTargetAngleRad;
-        boolean targetMoving = Math.abs(targetAngularVelocityRadSec)
-                > RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
+
+        // "Target is moving" with hysteresis: on above the threshold, off again only below
+        // half of it. A filtered speed that hovers around ONE threshold would otherwise flip
+        // the on-target output between zero power and feedforward every few loops.
+        double targetSpeed = Math.abs(targetAngularVelocityRadSec);
+        double movingEnter = RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
+        targetMovingLatched = targetSpeed > (targetMovingLatched ? 0.5 * movingEnter : movingEnter);
+        boolean targetMoving = targetMovingLatched;
 
         // Shortest path from the measured angle to the target, across +/- PI and after
         // any number of full revolutions.
@@ -498,7 +540,20 @@ public class TurretSubsystem {
             }
         }
 
-        onTarget = Math.abs(angleErrorRad) <= RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS;
+        // Aimed, with hysteresis. The turret becomes aimed inside the (tight) tolerance and
+        // stays aimed until the error grows beyond the (wider) exit tolerance. Without this
+        // a correction kick at the minimum power can carry the turret across the whole
+        // tolerance band, and the kick back does the same in the other direction: jitter.
+        // The wider exit band is used only while the target is NOT moving; a moving target
+        // keeps the tight tolerance so tracking does not get looser while the chassis turns.
+        // onTarget still holds last loop's value here; every place that must forget it
+        // (mode change, new target, stop, new zero) sets it to false.
+        double absError = Math.abs(angleErrorRad);
+        double enterTolerance = RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS;
+        double exitTolerance = Math.max(RobotConstants.Turret.ANGLE_EXIT_TOLERANCE_RADIANS,
+                enterTolerance);
+        onTarget = absError <= enterTolerance
+                || (onTarget && !targetMoving && absError <= exitTolerance);
 
         double power;
         if (onTarget) {
@@ -533,7 +588,7 @@ public class TurretSubsystem {
                     boolean targetComingToTurret = velocitySign != errorSign
                             && Math.signum(rawTargetVelocityRadSec) == velocitySign
                             && Math.abs(rawTargetVelocityRadSec)
-                                    > 0.5 * RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
+                            > 0.5 * RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
                     // Turret AHEAD of a target that is still travelling toward it: wait for
                     // the target instead of kicking the turret backwards (that makes it
                     // chatter). Turret BEHIND the target: push with the minimum power.
@@ -994,6 +1049,7 @@ public class TurretSubsystem {
         pidfController.reset();
         firstTargetSample = true;
         onTarget = false;
+        targetMovingLatched = false;
         setServoPower(0.0);
     }
 
@@ -1078,7 +1134,7 @@ public class TurretSubsystem {
      *   <li>{@code measuredAngleDeg}: where the encoder says the turret points</li>
      *   <li>{@code encoderTicks}: raw encoder count (use this to check ENCODER_REVERSED)</li>
      *   <li>{@code angleErrorDeg}: relative target minus measured, shortest path</li>
-     *   <li>{@code aimed at target}: true only when TRACKING and inside tolerance</li>
+     *   <li>{@code aimed at target}: true only when TRACKING and aimed (see {@link #isAimedAtTarget()})</li>
      *   <li>{@code lastCommandedPower}: power sent to both servos this loop</li>
      * </ul>
      */
@@ -1147,20 +1203,25 @@ public class TurretSubsystem {
     }
 
     /**
-     * @return true if the last {@link #update(Pose)} measured the turret within tolerance
-     *         of the angle it was told to hold. In HOME mode that angle is the home angle,
-     *         NOT the hive; use {@link #isAimedAtTarget()} to decide whether to shoot.
-     *         False before the first update, whenever the turret is stopped, and from a
-     *         target change until the next update.
+     * @return true if the turret counts as aimed at the angle it was told to hold. It has
+     *         hysteresis: it turns true once the error is inside
+     *         {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and, while the target is
+     *         not moving, stays true until the error exceeds
+     *         {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}.
+     *         In HOME mode that angle is the home angle, NOT the hive; use
+     *         {@link #isAimedAtTarget()} to decide whether to shoot. False before the first
+     *         update, whenever the turret is stopped, and from a target change until the
+     *         next update.
      */
     public boolean isOnTarget() {
         return onTarget;
     }
 
     /**
-     * @return true only if the turret is TRACKING the field target, the last
-     *         {@link #update(Pose)} measured it within tolerance, and the aim angle did
-     *         not have to be clipped to a soft limit. This is the "safe to shoot" check.
+     * @return true only if the turret is TRACKING the field target, {@link #isOnTarget()}
+     *         is true (so, once the turret has settled on a stationary target, it is within
+     *         the exit tolerance), and the aim angle did not have to be clipped to a soft
+     *         limit. This is the "safe to shoot" check.
      */
     public boolean isAimedAtTarget() {
         return enabled && !encoderFault && mode == TurretMode.TRACKING && onTarget && !targetClipped;
