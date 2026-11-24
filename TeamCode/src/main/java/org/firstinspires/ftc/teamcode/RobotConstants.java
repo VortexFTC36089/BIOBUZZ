@@ -684,11 +684,11 @@ public final class RobotConstants {
 
         /** Time given to the gate servo to finish opening before balls are fed. */
         // TODO(team): tune on the robot
-        public static final double GATE_OPEN_WAIT_MS = 500.0;
+        public static final double GATE_OPEN_WAIT_MS = 700.0;
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 0800.0;
+        public static final double FEED_TIME_MS = 1200.0;
     }
 
     /**

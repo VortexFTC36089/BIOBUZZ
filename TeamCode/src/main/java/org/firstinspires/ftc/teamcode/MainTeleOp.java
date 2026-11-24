@@ -586,10 +586,6 @@ public class MainTeleOp extends OpMode {
      */
     private Command shootBalls() {
         return sequential(
-                race(
-                        waitUntil(() -> outtake.atSpeed()),
-                        waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
-                ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
                 instant(() -> {
