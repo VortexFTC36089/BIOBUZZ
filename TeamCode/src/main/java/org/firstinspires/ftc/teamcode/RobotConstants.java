@@ -530,18 +530,21 @@ public final class RobotConstants {
         public static final double HOME_ANGLE_RADIANS = 0.0;
 
         /**
-         * Chassis speed deadbands used to detect when the robot is moving for turret
-         * position holding. Defaults are 0.5 in/s linear and 0.05 rad/s angular; raise
-         * these if odometry jitter prevents a stopped robot from settling.
+         * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
+         * means the turret spins without limit and always takes the shortest path to the
+         * target. Set back to {@code true} if any cable can wrap around the turret.
          */
-        public static double ROBOT_LINEAR_SPEED_THRESHOLD_IN_PER_SEC = 0.5;
-        public static double ROBOT_ANGULAR_SPEED_THRESHOLD_RAD_PER_SEC = 0.05;
+        public static final boolean USE_SOFT_LIMITS = false;
 
         /**
-         * Time the chassis must remain below both motion deadbands before the turret
-         * latches its current chassis-relative angle. Default: 0.15 seconds.
+         * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
+         * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
          */
-        public static double ROBOT_STOP_DEBOUNCE_SECONDS = 0.15;
+        // TODO(team): measure safe mechanical rotation limits in degrees
+        public static final double MIN_ANGLE_DEGREES = -180.0;
+        public static final double MAX_ANGLE_DEGREES = 180.0;
+        public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
+        public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
 
         /**
          * Servo power cap in [0, 1], and the power used for the fast part of every move
@@ -556,7 +559,7 @@ public final class RobotConstants {
          * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
          */
         // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
-        public static final double MAX_POWER = 1.0;
+        public static final double MAX_POWER = 0.9;
 
         /**
          * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
