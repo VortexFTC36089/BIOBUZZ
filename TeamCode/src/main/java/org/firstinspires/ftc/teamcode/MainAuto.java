@@ -78,7 +78,7 @@ public class MainAuto extends LinearOpMode {
      */
     public Command TrackShootBalls() {
         return sequential(
-                instant(() -> outtake.outtake()),
+                instant(() -> outtake.outtakeFrom(follower.pose())),
                 race(
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
@@ -102,7 +102,7 @@ public class MainAuto extends LinearOpMode {
     }
     public Command shootBalls() {
         return sequential(
-                instant(() -> outtake.outtake()),
+                instant(() -> outtake.outtakeFrom(follower.pose())),
                 race(
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)

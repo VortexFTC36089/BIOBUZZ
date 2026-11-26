@@ -432,8 +432,9 @@ public class MainTeleOp extends OpMode {
         wasShootTrigger = shootPressed;
 
         // ---- Intake / outtake ----
-        // Flywheels stay on for the whole TeleOp, including during shoot.
-        outtake.outtake();
+        // Flywheels stay on for the whole TeleOp, including during shoot. Their RPM
+        // follows the distance to the hive (see ShooterRPMTable).
+        outtake.outtakeFrom(follower.pose());
         if (!shooting) {
             updateIntakeFromGamepad();
             outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
@@ -707,6 +708,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Transfer", intake.getTransferState());
+        ShooterRPMTable.addTelemetry(telemetry, pose);
         telemetry.addData("Outtake Motor", outtake.getMotorState());
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());

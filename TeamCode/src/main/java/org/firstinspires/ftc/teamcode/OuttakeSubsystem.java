@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -31,6 +32,8 @@ public class OuttakeSubsystem {
     private boolean gateRequestedOpen;
     private MotorState motorState = MotorState.OFF;
     private double targetRpm;
+    /** Kp from {@link ShooterRPMTable} for both wheels; 0 uses OuttakeControllerConfig. */
+    private double tableKp;
     private double measuredLeftRpm;
     private double measuredRightRpm;
     private double filteredLeftRpm;
@@ -86,7 +89,19 @@ public class OuttakeSubsystem {
     }
 
     /**
-     * Requests a non-negative flywheel speed. Negative values stop the wheels;
+     * Uses the RPM and Kp that {@link ShooterRPMTable} gives for the robot's distance to
+     * the hive.
+     *
+     * @param pose current robot pose from the follower
+     */
+    public void outtakeFrom(Pose pose) {
+        setTargetRpm(ShooterRPMTable.rpmFor(pose));
+        tableKp = ShooterRPMTable.kpFor(pose);
+    }
+
+    /**
+     * Requests a non-negative flywheel speed, using the Kp values in
+     * {@link OuttakeControllerConfig}. Negative values stop the wheels;
      * non-finite values are rejected rather than being allowed into the controller.
      */
     public void setTargetRpm(double rpm) {
@@ -94,6 +109,7 @@ public class OuttakeSubsystem {
             throw new IllegalArgumentException("Target RPM must be finite");
         }
         targetRpm = Math.max(0.0, rpm);
+        tableKp = 0.0;
         motorState = targetRpm > 0.0 ? MotorState.SPINNING_UP : MotorState.OFF;
         if (targetRpm == 0.0) {
             setMotorPowers(0.0, 0.0);
@@ -169,12 +185,12 @@ public class OuttakeSubsystem {
         double leftVolts = calculateCommandVoltage(
                 OuttakeControllerConfig.LEFT_KS_VOLTS,
                 OuttakeControllerConfig.LEFT_KV_VOLTS_PER_RPM,
-                OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM,
+                getLeftKp(),
                 filteredLeftRpm);
         double rightVolts = calculateCommandVoltage(
                 OuttakeControllerConfig.RIGHT_KS_VOLTS,
                 OuttakeControllerConfig.RIGHT_KV_VOLTS_PER_RPM,
-                OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM,
+                getRightKp(),
                 filteredRightRpm);
         if (!isFinite(leftVolts) || !isFinite(rightVolts)) {
             failSafe("Controller voltage calculation is not finite");
@@ -267,6 +283,16 @@ public class OuttakeSubsystem {
 
     public double getTargetRpm() {
         return targetRpm;
+    }
+
+    /** @return the left wheel Kp in use, in volts per RPM of error */
+    public double getLeftKp() {
+        return tableKp > 0.0 ? tableKp : OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM;
+    }
+
+    /** @return the right wheel Kp in use, in volts per RPM of error */
+    public double getRightKp() {
+        return tableKp > 0.0 ? tableKp : OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM;
     }
 
     public double getLeftRpm() {
