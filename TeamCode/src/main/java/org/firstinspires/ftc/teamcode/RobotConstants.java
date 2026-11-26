@@ -156,7 +156,7 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static double TRANSFER_TARGET_RPM = 3000.0;
+        public static double TRANSFER_TARGET_RPM = 1850;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
@@ -227,7 +227,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static double TARGET_RPM = 2150;
+        public static double TARGET_RPM = 1911.5;
         /** Alternate target used by the outtake tuning OpMode; tune for the second shot mode. */
         public static double SECONDARY_TARGET_RPM = 1300;
         /**
@@ -243,7 +243,7 @@ public final class RobotConstants {
         public static final String GATE_SERVO = "outtake_gate";
         // TODO(team): set both gate positions on the robot (0.0 to 1.0)
         public static double GATE_CLOSED_POSITION = .5;
-        public static double GATE_OPEN_POSITION = .72;
+        public static double GATE_OPEN_POSITION = .775;
     }
 
 
@@ -253,7 +253,17 @@ public final class RobotConstants {
      * its own small gear, see {@link #ENCODER_TO_TURRET_RATIO}). Both servos sit on the
      * same side of the turret and their pinions mesh with the same turret gear. The turret
      * angle is read from the encoder, so it does not drift.
+     *
+     * <p>Tunable from Panels. This class is {@code @Configurable} and every tunable value is
+     * a plain (non-final) static field that {@link TurretSubsystem} reads again on every
+     * loop, so a number edited in Panels takes effect right away, even while an OpMode runs.
+     * Panels edits are NOT saved to this file and are lost when the Robot Controller app
+     * restarts: when a value is right, copy it here. Hardware names, the encoder port and the
+     * physical constants ({@link #GEAR_RATIO}, {@link #SERVO_FREE_SPEED_RPM}, ...) stay
+     * {@code final}. Change a direction flag (ENCODER_REVERSED, SERVO_*_REVERSED) only while
+     * the turret is stopped.
      */
+    @Configurable
     public static final class Turret {
         // Hardware map names (must match the Robot Controller config exactly).
         public static final String SERVO_LEFT = "turretServoLeft";
@@ -306,7 +316,7 @@ public final class RobotConstants {
          * the turret spin; it makes it aim off by a constant factor.
          */
         // TODO(team): measure on the robot (see above)
-        public static final double ENCODER_TO_TURRET_RATIO = 1.0 / GEAR_RATIO;
+        public static double ENCODER_TO_TURRET_RATIO = 1.0 / GEAR_RATIO;
 
         /**
          * Set true if turning the turret counterclockwise (looking down from above, the
@@ -325,7 +335,7 @@ public final class RobotConstants {
         // ENCODER_PORT). NOT YET VERIFIED. Verify on the init screen: turret turned LEFT by
         // hand -> measuredAngleDeg must go UP. If it goes DOWN, set this to false.
         // TODO(team): verify on the robot
-        public static final boolean ENCODER_REVERSED = true;
+        public static boolean ENCODER_REVERSED = true;
 
         /**
          * Flip so BOTH servos push the turret the same direction, and so positive power
@@ -345,15 +355,15 @@ public final class RobotConstants {
         // the encoder moving against the commanded power, flips the servo direction at run
         // time and shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station with the
         // steps to find out which flag is the wrong one.
-        public static final boolean SERVO_LEFT_REVERSED = true;
-        public static final boolean SERVO_RIGHT_REVERSED = true;
+        public static boolean SERVO_LEFT_REVERSED = true;
+        public static boolean SERVO_RIGHT_REVERSED = true;
 
         /**
          * Servo power used while the operator jogs the turret by hand with Gamepad 2
          * Dpad Left / Right. Also the quickest direction check: Dpad LEFT must turn the
          * turret LEFT (counterclockwise from above) and make measuredAngleDeg go UP.
          */
-        public static final double JOG_POWER = 0.35;
+        public static double JOG_POWER = 0.35;
 
         /**
          * Direction monitor: a commanded power at or above this (either sign) is expected
@@ -361,10 +371,10 @@ public final class RobotConstants {
          * {@link #RUNAWAY_DEGREES}, the servo and encoder directions disagree and the
          * subsystem flips the servo direction at run time (see {@link #SERVO_LEFT_REVERSED}).
          */
-        public static final double DIRECTION_MONITOR_MIN_POWER = 0.30;
+        public static double DIRECTION_MONITOR_MIN_POWER = 0.30;
 
         /** See {@link #DIRECTION_MONITOR_MIN_POWER}. Big enough that a hand bump cannot trigger it. */
-        public static final double RUNAWAY_DEGREES = 10.0;
+        public static double RUNAWAY_DEGREES = 10.0;
 
         /**
          * Coast allowance for the direction monitor, in seconds. After a fast move the
@@ -375,7 +385,7 @@ public final class RobotConstants {
          * false flip, and a false flip makes the turret run away for real. Raise this if
          * "SERVO DIRECTION AUTO-FLIPPED" shows up on a turret whose directions are right.
          */
-        public static final double DIRECTION_MONITOR_COAST_SECONDS = 0.3;
+        public static double DIRECTION_MONITOR_COAST_SECONDS = 0.3;
 
         /**
          * Direction monitor, second test. With reversed directions and the target behind
@@ -386,10 +396,10 @@ public final class RobotConstants {
          * behind). This many reversals in {@link #ANTIPODE_CHATTER_SECONDS}, all more than
          * 90 degrees from the target, are treated as reversed directions.
          */
-        public static final int ANTIPODE_CHATTER_REVERSALS = 4;
+        public static int ANTIPODE_CHATTER_REVERSALS = 4;
 
         /** See {@link #ANTIPODE_CHATTER_REVERSALS}. */
-        public static final double ANTIPODE_CHATTER_SECONDS = 1.0;
+        public static double ANTIPODE_CHATTER_SECONDS = 1.0;
 
         /**
          * Most run-time servo direction flips allowed in one OpMode. One flip fixes a
@@ -397,7 +407,7 @@ public final class RobotConstants {
          * encoder is slipping or reading another mechanism), so the turret is stopped
          * instead of being flipped back and forth.
          */
-        public static final int MAX_AUTO_FLIPS = 2;
+        public static int MAX_AUTO_FLIPS = 2;
 
         /**
          * Encoder monitor. While HOME or TRACKING is driving the servos with any power
@@ -410,10 +420,10 @@ public final class RobotConstants {
          * "TURRET STOPPED: ENCODER NOT COUNTING". Manual jog (Dpad Left / Right) still
          * works; Gamepad 2 Dpad Down or Up clears the stop and retries.
          */
-        public static final double ENCODER_STALL_MIN_POWER = 0.30;
+        public static double ENCODER_STALL_MIN_POWER = 0.30;
 
         /** See {@link #ENCODER_STALL_MIN_POWER}. */
-        public static final double ENCODER_STALL_SECONDS = 0.5;
+        public static double ENCODER_STALL_SECONDS = 0.5;
 
         /**
          * See {@link #ENCODER_STALL_MIN_POWER}. Longer than the fast time so a turret that
@@ -421,14 +431,14 @@ public final class RobotConstants {
          * with a WORKING encoder gets stopped a degree or two short of the target, the
          * minimum power is too weak to move it: measure {@link #SERVO_DEADBAND_POWER}.
          */
-        public static final double ENCODER_STALL_SLOW_SECONDS = 1.0;
+        public static double ENCODER_STALL_SLOW_SECONDS = 1.0;
 
         /**
          * See {@link #ENCODER_STALL_MIN_POWER}. About half a degree of turret travel. More
          * than one count, so an encoder with one dead channel (the count flickers by 1)
          * still counts as not counting.
          */
-        public static final int ENCODER_STALL_MIN_TICKS = 30;
+        public static int ENCODER_STALL_MIN_TICKS = 30;
 
         /**
          * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
@@ -445,7 +455,7 @@ public final class RobotConstants {
          * accuracy. It only caps how fast a target may appear to move for the {@link #KV}
          * feedforward and sizes {@link #KV} itself.
          */
-        public static final double RAD_PER_SEC_AT_FULL_POWER =
+        public static double RAD_PER_SEC_AT_FULL_POWER =
                 SERVO_FREE_SPEED_RPM * 2.0 * Math.PI / 60.0 / GEAR_RATIO;
 
         /**
@@ -455,49 +465,53 @@ public final class RobotConstants {
          * <p>To measure: command the turret servos at a fixed low power and raise it in
          * small steps until the turret just starts to turn in both directions; use the
          * larger of the two values.
+         *
+         * <p>This one stays a code-only number: {@link #MIN_COMMAND_POWER}, {@link #KF} and
+         * {@link #KV} START from it but are separate Panels numbers, so after measuring it
+         * edit those three too.
          */
         // TODO(team): measure on the robot (0.08 is only a placeholder)
         public static final double SERVO_DEADBAND_POWER = 0.08;
 
         /**
          * Smallest power used for a correction TOWARD the target while the turret is outside
-         * {@link #ANGLE_TOLERANCE_RADIANS}. Must stay above {@link #SERVO_DEADBAND_POWER} so
+         * {@link #ANGLE_TOLERANCE_DEGREES}. Must stay above {@link #SERVO_DEADBAND_POWER} so
          * the correction actually moves the turret. While the target is moving, weaker (or
          * zero) power can still be sent: feedforward in the other direction is left alone,
          * and a turret that is ahead of a target coming toward it just waits. Raising this
          * makes the turret step in bigger jumps and it can start to hunt back and forth.
          */
-        public static final double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
+        public static double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
 
         /**
          * Time constant (seconds) of the low-pass filter on the target's angular velocity,
          * which feeds {@link #KV}. Larger is smoother but lags more; 0 turns the filter off.
          */
-        public static final double TARGET_VELOCITY_FILTER_SECONDS = 0.10;
+        public static double TARGET_VELOCITY_FILTER_SECONDS = 0.10;
 
         /**
-         * Target angular speed (radians/second) above which the target counts as MOVING.
+         * Target angular speed (degrees/second) above which the target counts as MOVING.
          * While it is moving, the turret keeps following with feedforward even inside
-         * {@link #ANGLE_TOLERANCE_RADIANS} instead of stopping dead, so it does not
+         * {@link #ANGLE_TOLERANCE_DEGREES} instead of stopping dead, so it does not
          * stop-start while the chassis spins. Below this speed the turret stops once aimed.
          */
-        public static final double TARGET_MOVING_THRESHOLD_RAD_SEC = Math.toRadians(10.0);
+        public static double TARGET_MOVING_THRESHOLD_DEG_SEC = 10.0;
 
         /**
          * Longest time (milliseconds) the TeleOp shoot sequence waits for the turret to
          * finish aiming before it fires anyway. Only applies while the turret is TRACKING.
          */
-        public static final double AIM_WAIT_TIMEOUT_MS = 750.0;
+        public static double AIM_WAIT_TIMEOUT_MS = 750.0;
 
         /**
          * Turret pivot offset from the robot's localization center in inches
          * (+X is robot forward, +Y is robot left).
          */
         // TODO(team): measure turret pivot offset from robot center in inches
-        public static final double OFFSET_X_INCHES = 0.0;
+        public static double OFFSET_X_INCHES = 0.0;
         // 2.0 taken from branch Shot-Feeder-Test (commit 31f0e2c, 2026-11-17). +Y is the
         // robot's LEFT; if the turret actually sits 2 in to the right, use -2.0.
-        public static final double OFFSET_Y_INCHES = 2.0;
+        public static double OFFSET_Y_INCHES = 2.0;
 
         /**
          * The two hive sides in Pedro Pathing inches. The turret aims at the TOP side when the
@@ -508,43 +522,37 @@ public final class RobotConstants {
          * center-origin -72 to 72 frame). Every turret target must be given in this frame.
          */
         // TODO(team): replace these placeholders with the real hive coordinates (read them in the Pedro visualizer)
-        public static final double TOP_TARGET_X_INCHES = 57.0;
-        public static final double TOP_TARGET_Y_INCHES = 84.0;
-        public static final double BOTTOM_TARGET_X_INCHES = 57.0;
-        public static final double BOTTOM_TARGET_Y_INCHES = 60.0;
+        public static double TOP_TARGET_X_INCHES = 57.0;
+        public static double TOP_TARGET_Y_INCHES = 84.0;
+        public static double BOTTOM_TARGET_X_INCHES = 57.0;
+        public static double BOTTOM_TARGET_Y_INCHES = 60.0;
 
         /** Y position (inches) where the aimed side switches; 72 is the middle of a 144-inch field. */
-        public static final double SIDE_SWITCH_Y_INCHES = 72.0;
+        public static double SIDE_SWITCH_Y_INCHES = 72.0;
 
         /** Dead band (inches) around the switch line so the target does not flicker. */
-        public static final double SIDE_HYSTERESIS_INCHES = 3.0;
-
-        /** Target used before the first pose arrives (the bottom side). */
-        public static final double DEFAULT_TARGET_X_INCHES = BOTTOM_TARGET_X_INCHES;
-        public static final double DEFAULT_TARGET_Y_INCHES = BOTTOM_TARGET_Y_INCHES;
+        public static double SIDE_HYSTERESIS_INCHES = 3.0;
 
         /**
-         * Chassis-relative angle (radians) the turret turns to and holds in HOME mode
-         * (Gamepad 2 Dpad Up). 0 is straight ahead on the robot.
+         * Chassis-relative angle (degrees) the turret turns to and holds in HOME mode
+         * (Gamepad 2 Dpad Up). 0 is straight ahead on the robot, + is counterclockwise (left).
          */
-        public static final double HOME_ANGLE_RADIANS = 0.0;
+        public static double HOME_ANGLE_DEGREES = 0.0;
 
         /**
          * Whether soft rotation limits are enforced to prevent wire binding. {@code false}
          * means the turret spins without limit and always takes the shortest path to the
          * target. Set back to {@code true} if any cable can wrap around the turret.
          */
-        public static final boolean USE_SOFT_LIMITS = false;
+        public static boolean USE_SOFT_LIMITS = false;
 
         /**
          * Allowed turret angles relative to the chassis (0 = forward, + = counterclockwise).
          * Only used while {@link #USE_SOFT_LIMITS} is {@code true}.
          */
         // TODO(team): measure safe mechanical rotation limits in degrees
-        public static final double MIN_ANGLE_DEGREES = -180.0;
-        public static final double MAX_ANGLE_DEGREES = 180.0;
-        public static final double MIN_ANGLE_RADIANS = Math.toRadians(MIN_ANGLE_DEGREES);
-        public static final double MAX_ANGLE_RADIANS = Math.toRadians(MAX_ANGLE_DEGREES);
+        public static double MIN_ANGLE_DEGREES = -180.0;
+        public static double MAX_ANGLE_DEGREES = 180.0;
 
         /**
          * Servo power cap in [0, 1], and the power used for the fast part of every move
@@ -559,7 +567,7 @@ public final class RobotConstants {
          * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
          */
         // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
-        public static final double MAX_POWER = 0.9;
+        public static double MAX_POWER = 0.9;
 
         /**
          * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
@@ -568,7 +576,7 @@ public final class RobotConstants {
          * <p>Farther from the target than this, the turret runs flat out at
          * {@link #MAX_POWER}. Once it is closer than this, the power is reduced by
          * {@link #SLOWDOWN_POWER_PER_DEGREE} for every degree it gets closer, but never
-         * below {@link #MIN_COMMAND_POWER}. Inside {@link #ANGLE_TOLERANCE_RADIANS} it stops.
+         * below {@link #MIN_COMMAND_POWER}. Inside {@link #ANGLE_TOLERANCE_DEGREES} it stops.
          *
          * <p>Tuning: if the turret OVERSHOOTS the target and comes back, make this BIGGER so
          * it starts braking earlier. If it slows down too early and wastes time, make it
@@ -584,7 +592,7 @@ public final class RobotConstants {
          * hard braking, and a heavy turret will still overshoot it.
          */
         // TODO(team): tune on the robot
-        public static final double SLOWDOWN_START_DEGREES = 45.0;
+        public static double SLOWDOWN_START_DEGREES = 70.0;
 
         /**
          * TURNING SPEED PROFILE, knob 2 of 2: how quickly the turret slows down once it is
@@ -611,7 +619,7 @@ public final class RobotConstants {
          * Staying about 10 percent above it, as 0.018 does, leaves a short creep at the end.
          */
         // TODO(team): tune on the robot
-        public static final double SLOWDOWN_POWER_PER_DEGREE = 0.018;
+        public static double SLOWDOWN_POWER_PER_DEGREE = 0.012;
 
         /**
          * Extra controller terms on top of the turning speed profile above. The profile
@@ -632,46 +640,52 @@ public final class RobotConstants {
          * 0 to turn it off.
          */
         // TODO(team): tune on the robot
-        public static final double KI = 0.0;
-        public static final double KD = 0.0;
-        public static final double KV = (1.0 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER;
-        public static final double KF = SERVO_DEADBAND_POWER;
+        public static double KI = 0.0;
+        public static double KD = 0.0;
+        public static double KV = (1.0 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER;
+        public static double KF = SERVO_DEADBAND_POWER;
 
         /** Maximum integral accumulation (radians * seconds). */
-        public static final double MAX_INTEGRAL = 0.5;
+        public static double MAX_INTEGRAL = 0.5;
 
-        /** Angle error deadband (radians) within which the turret counts as aimed. */
-        public static final double ANGLE_TOLERANCE_RADIANS = Math.toRadians(1.0);
+        /** Angle error deadband (degrees) within which the turret counts as aimed. */
+        public static double ANGLE_TOLERANCE_DEGREES = 1.5;
 
         /**
-         * Once aimed on a stationary target, the turret stays still until the error exceeds this.
-         * Must be larger than ANGLE_TOLERANCE_RADIANS. It has to be wider than ONE correction kick:
-         * the degrees the turret moves in one loop at MIN_COMMAND_POWER, plus about 1 degree.
+         * Degrees. Once aimed on a stationary target, the turret stays still until the error
+         * exceeds this. Must be larger than ANGLE_TOLERANCE_DEGREES. It has to be wider than
+         * ONE correction kick: the degrees the turret moves in one loop at MIN_COMMAND_POWER,
+         * plus about 1 degree.
          */
-        public static final double ANGLE_EXIT_TOLERANCE_RADIANS = Math.toRadians(2.0);
+        public static double ANGLE_EXIT_TOLERANCE_DEGREES = 3.0;
     }
 
     /**
-     * Two-position servo (claw, hood, flap, etc.).
+     * Two-position flower ramp servo.
      *
      * <p>Servo positions are unitless in {@code [0.0, 1.0]}. 0.0 and 1.0
      * are the mechanical ends of travel; measure the two poses you actually
      * want and put them here.
+     *
+     * <p>Tunable from Panels (RobotConstants > FlowerRamp). Panels edits are NOT saved
+     * to this file and are lost when the Robot Controller app restarts: when a position
+     * is right, copy the number here.
      */
-    public static final class Servo {
+    @Configurable
+    public static final class FlowerRamp {
         public static final String NAME = "flower";
 
         /**
          * First pose. Used at init so the mechanism starts in a known place.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_A = 1;
+        public static double POSITION_A = 1;
 
         /**
          * Second pose.
          */
         // TODO(team): measure this on the robot
-        public static final double POSITION_B = .57;
+        public static double POSITION_B = .59;
     }
 
     /**
@@ -707,5 +721,86 @@ public final class RobotConstants {
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
         public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));
+    }
+
+    /**
+     * Path points for {@link TestAuto}, editable from Panels.
+     *
+     * <p>Units: X and Y are inches in the same Pedro Pathing field frame as the rest of the
+     * code (origin at a field corner, both axes 0 to 144). HEADING is degrees (0 = facing
+     * +X, counterclockwise positive). A control point only has X and Y: it shapes a Bezier
+     * curve and has no heading.
+     *
+     * <p>{@link TestAuto} reads these while it waits for Play (every INIT loop) and once
+     * more when Play is pressed, and builds all of its paths at that moment. So edit them
+     * before pressing Play; a value changed after Play does not affect a run that is already
+     * going. Editing the START values while waiting also moves the follower to the new start
+     * pose.
+     *
+     * <p>Panels edits are NOT saved to this file and are lost when the Robot Controller app
+     * restarts: when a point is right, copy the number here.
+     *
+     * <p>Route order: start -> point1 -> point2 (curve via point2Control1) -> point3 (curve
+     * via point3Control1 and point3Control2) -> point4 (curve via point4Control1 and
+     * point4Control2) -> point5 -> back to point4 -> point3 (the point 4 curve driven
+     * backwards) -> point6 -> park.
+     */
+    @Configurable
+    public static final class TestAutoPoints {
+
+        // ---- Start pose (the pose the follower and the turret start from) ----
+        public static double START_X = 56;
+        public static double START_Y = 8;
+        public static double START_HEADING_DEG = 90;
+
+        // ---- Point 1: straight line from start ----
+        public static double POINT1_X = 35;
+        public static double POINT1_Y = 23;
+        public static double POINT1_HEADING_DEG = 180;
+
+        // ---- Point 2: curve from point 1, heading held at the point 2 heading ----
+        public static double POINT2_X = 10;
+        public static double POINT2_Y = 8;
+        public static double POINT2_HEADING_DEG = 180;
+        /** Bezier control point of the point 1 -> point 2 curve. */
+        public static double POINT2_CONTROL1_X = 80;
+        public static double POINT2_CONTROL1_Y = 11;
+
+        // ---- Point 3: curve from point 2 (a shot is taken here) ----
+        public static double POINT3_X = 59;
+        public static double POINT3_Y = 133;
+        public static double POINT3_HEADING_DEG = 270;
+        /** First Bezier control point of the point 2 -> point 3 curve. */
+        public static double POINT3_CONTROL1_X = 29;
+        public static double POINT3_CONTROL1_Y = 122;
+        /** Second Bezier control point of the point 2 -> point 3 curve. */
+        public static double POINT3_CONTROL2_X = 59;
+        public static double POINT3_CONTROL2_Y = 115;
+
+        // ---- Point 4: curve from point 3; also the start of the point 4 -> point 3 return ----
+        public static double POINT4_X = 20;
+        public static double POINT4_Y = 48;
+        public static double POINT4_HEADING_DEG = 180;
+        /** First Bezier control point of the point 3 -> point 4 curve (last on the way back). */
+        public static double POINT4_CONTROL1_X = 58;
+        public static double POINT4_CONTROL1_Y = 115;
+        /** Second Bezier control point of the point 3 -> point 4 curve (first on the way back). */
+        public static double POINT4_CONTROL2_X = 31;
+        public static double POINT4_CONTROL2_Y = 122;
+
+        // ---- Point 5: straight line from point 4 and back ----
+        public static double POINT5_X = 17;
+        public static double POINT5_Y = 48;
+        public static double POINT5_HEADING_DEG = 180;
+
+        // ---- Point 6: straight line from point 3 ----
+        public static double POINT6_X = 56;
+        public static double POINT6_Y = 8;
+        public static double POINT6_HEADING_DEG = 90;
+
+        // ---- Park: final straight line from point 6 ----
+        public static double PARK_X = 17;
+        public static double PARK_Y = 93;
+        public static double PARK_HEADING_DEG = 90;
     }
 }

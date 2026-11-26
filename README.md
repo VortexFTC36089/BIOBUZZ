@@ -123,7 +123,7 @@ Do **not** press gamepad 1 **X** or **B** (drive to a pose) or run Foresight tes
 | X | Follow a line to the start pose `Field.START_POSE` (cancels if you move a stick) |
 | B | Follow a line to the opposite start pose `Field.OPPOSE_POSE` (cancels if you move a stick) |
 | Back | Set current heading as field-centric forward (preserves localizer pose for turret). Field-centric drive itself has no button bound right now. |
-| A | Toggle servo `flower` between `Servo.POSITION_A` / `POSITION_B` (currently disabled: `FLOWER_SERVO_ENABLED = false` in `MainTeleOp`) |
+| A | Toggle servo `flower` between `FlowerRamp.POSITION_A` / `POSITION_B` (both tunable in Panels; turn off with `FLOWER_SERVO_ENABLED` in `MainTeleOp`) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
 

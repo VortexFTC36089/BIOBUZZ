@@ -40,8 +40,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  * With a single tolerance that kick can carry the turret across the whole tolerance band
  * and the turret then kicks back, again and again. The aimed state therefore has
  * HYSTERESIS: the turret stops once it is inside
- * {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and stays stopped until the error
- * grows beyond {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}. The wider exit
+ * {@link RobotConstants.Turret#ANGLE_TOLERANCE_DEGREES} and stays stopped until the error
+ * grows beyond {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_DEGREES}. The wider exit
  * band applies only while the target is NOT moving: while the chassis is turning or driving
  * past the hive the tight tolerance applies in both directions, so tracking stays as tight
  * as before. The "target is moving" test has hysteresis too, so a target speed that hovers
@@ -63,6 +63,14 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *
  * <p>The servos are not commanded until the first {@link #update(Pose)}, so they stay
  * unpowered during INIT and the turret can be turned by hand to check the encoder.
+ *
+ * <h3>Live tuning from Panels</h3>
+ * Every tunable value in {@link RobotConstants.Turret} is a non-final static field, and
+ * {@code RobotConstants.Turret} is {@code @Configurable}, so Panels can change it while an
+ * OpMode runs. Most values are read from there on every loop. The few this class keeps a
+ * working copy of (extra controller gains, pivot offset, soft limits, home angle and the
+ * direction flags) are picked up by {@code applyLiveConfig()} at the start of
+ * {@link #update(Pose)} and {@link #refresh()}.
  */
 public class TurretSubsystem {
 
@@ -77,8 +85,6 @@ public class TurretSubsystem {
         private double kI;
         private double kD;
         private double kF;
-        private double maxIntegral = RobotConstants.Turret.MAX_INTEGRAL;
-
         private double integralSum = 0.0;
         private double prevError = 0.0;
         private boolean firstUpdate = true;
@@ -109,6 +115,8 @@ public class TurretSubsystem {
             }
 
             if (dt > 0.0 && kI != 0.0) {
+                // Read live so Panels can change the limit while running.
+                double maxIntegral = RobotConstants.Turret.MAX_INTEGRAL;
                 integralSum = Range.clip(integralSum + angleError * dt, -maxIntegral, maxIntegral);
             }
             double iTerm = kI * integralSum;
@@ -171,7 +179,7 @@ public class TurretSubsystem {
         TRACKING,
         /**
          * Turns to and holds a fixed chassis-relative angle
-         * ({@link RobotConstants.Turret#HOME_ANGLE_RADIANS} unless changed with
+         * ({@link RobotConstants.Turret#HOME_ANGLE_DEGREES} unless changed with
          * {@link #setHomeAngle(double)}).
          */
         HOME,
@@ -222,7 +230,7 @@ public class TurretSubsystem {
     private TurretMode mode = TurretMode.TRACKING;
 
     /** Chassis-relative angle (radians) held while in {@link TurretMode#HOME}. */
-    private double homeAngleRad = RobotConstants.Turret.HOME_ANGLE_RADIANS;
+    private double homeAngleRad = Math.toRadians(RobotConstants.Turret.HOME_ANGLE_DEGREES);
 
     // Geometry
     private double xOffsetInches = RobotConstants.Turret.OFFSET_X_INCHES;
@@ -236,12 +244,13 @@ public class TurretSubsystem {
 
     // Rotation soft limits (prevent wire binding)
     private boolean useSoftLimits = RobotConstants.Turret.USE_SOFT_LIMITS;
-    private double minAngleRadians = RobotConstants.Turret.MIN_ANGLE_RADIANS;
-    private double maxAngleRadians = RobotConstants.Turret.MAX_ANGLE_RADIANS;
+    private double minAngleRadians = Math.toRadians(RobotConstants.Turret.MIN_ANGLE_DEGREES);
+    private double maxAngleRadians = Math.toRadians(RobotConstants.Turret.MAX_ANGLE_DEGREES);
 
-    // Field target (hive) in Pedro Pathing inches
-    private double targetXInches = RobotConstants.Turret.DEFAULT_TARGET_X_INCHES;
-    private double targetYInches = RobotConstants.Turret.DEFAULT_TARGET_Y_INCHES;
+    // Field target (hive) in Pedro Pathing inches. Until the first pose arrives it is the
+    // bottom side; selectTargetSide() then reads the live values every loop.
+    private double targetXInches = RobotConstants.Turret.BOTTOM_TARGET_X_INCHES;
+    private double targetYInches = RobotConstants.Turret.BOTTOM_TARGET_Y_INCHES;
 
     // The hive has two sides. By default the side is picked from the robot's Y position.
     private boolean autoSelectSide = true;
@@ -258,7 +267,7 @@ public class TurretSubsystem {
     private boolean firstTargetSample = true;
     /**
      * Latched "target is moving" flag, with hysteresis: it turns on above
-     * {@link RobotConstants.Turret#TARGET_MOVING_THRESHOLD_RAD_SEC} and only turns off
+     * {@link RobotConstants.Turret#TARGET_MOVING_THRESHOLD_DEG_SEC} and only turns off
      * again below half of that. A filtered target speed that hovers around a single
      * threshold would otherwise switch the on-target output between zero power and
      * feedforward every few loops.
@@ -274,13 +283,33 @@ public class TurretSubsystem {
 
     /**
      * True while the turret counts as aimed. Has hysteresis: it turns on inside
-     * {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and, while the target is not
+     * {@link RobotConstants.Turret#ANGLE_TOLERANCE_DEGREES} and, while the target is not
      * moving, stays on until the error exceeds
-     * {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}.
+     * {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_DEGREES}.
      */
     private boolean onTarget = false;
     /** True if the last commanded angle had to be clipped to a soft limit. */
     private boolean targetClipped = false;
+
+    // ---- Live tuning (Panels) ----
+    // The RobotConstants.Turret values are non-final so Panels can edit them while an OpMode
+    // runs. Most are read straight from there every loop. The few this class keeps a working
+    // copy of are re-applied by applyLiveConfig(), but only when the configured value
+    // CHANGED since the last look, so the setters (setGains, setMountingOffset, ...) keep
+    // working until somebody edits the matching value in Panels.
+    private double appliedKi = RobotConstants.Turret.KI;
+    private double appliedKd = RobotConstants.Turret.KD;
+    private double appliedKf = RobotConstants.Turret.KF;
+    private double appliedKv = RobotConstants.Turret.KV;
+    private double appliedOffsetX = RobotConstants.Turret.OFFSET_X_INCHES;
+    private double appliedOffsetY = RobotConstants.Turret.OFFSET_Y_INCHES;
+    private boolean appliedUseSoftLimits = RobotConstants.Turret.USE_SOFT_LIMITS;
+    private double appliedMinAngleDeg = RobotConstants.Turret.MIN_ANGLE_DEGREES;
+    private double appliedMaxAngleDeg = RobotConstants.Turret.MAX_ANGLE_DEGREES;
+    private double appliedHomeAngleDeg = RobotConstants.Turret.HOME_ANGLE_DEGREES;
+    private boolean appliedLeftReversed = RobotConstants.Turret.SERVO_LEFT_REVERSED;
+    private boolean appliedRightReversed = RobotConstants.Turret.SERVO_RIGHT_REVERSED;
+    private boolean appliedEncoderReversed = RobotConstants.Turret.ENCODER_REVERSED;
 
     /**
      * Looks up both continuous servos and the encoder, and zeroes the angle where the
@@ -397,7 +426,88 @@ public class TurretSubsystem {
      * the angle and tick telemetry are live before Play while the servos are unpowered.
      */
     public void refresh() {
+        applyLiveConfig();
         currentAngleRad = readAngleRadians();
+    }
+
+    /**
+     * Picks up values edited in Panels since the last call. Runs at the start of
+     * {@link #update(Pose)} and {@link #refresh()}. Only values that CHANGED are applied, so
+     * the setters ({@link #setGains}, {@link #setMountingOffset}, ...) keep working until the
+     * matching value is edited in Panels. Everything not handled here is read straight from
+     * {@link RobotConstants.Turret} wherever it is used.
+     */
+    private void applyLiveConfig() {
+        double ki = RobotConstants.Turret.KI;
+        double kd = RobotConstants.Turret.KD;
+        double kf = RobotConstants.Turret.KF;
+        double kv = RobotConstants.Turret.KV;
+        if (ki != appliedKi || kd != appliedKd || kf != appliedKf || kv != appliedKv) {
+            pidfController.setGains(ki, kd, kf);
+            this.kV = kv;
+            appliedKi = ki;
+            appliedKd = kd;
+            appliedKf = kf;
+            appliedKv = kv;
+        }
+
+        double offsetX = RobotConstants.Turret.OFFSET_X_INCHES;
+        double offsetY = RobotConstants.Turret.OFFSET_Y_INCHES;
+        if (offsetX != appliedOffsetX || offsetY != appliedOffsetY) {
+            setMountingOffset(offsetX, offsetY);
+            appliedOffsetX = offsetX;
+            appliedOffsetY = offsetY;
+        }
+
+        boolean limits = RobotConstants.Turret.USE_SOFT_LIMITS;
+        double minDeg = RobotConstants.Turret.MIN_ANGLE_DEGREES;
+        double maxDeg = RobotConstants.Turret.MAX_ANGLE_DEGREES;
+        if (limits != appliedUseSoftLimits || minDeg != appliedMinAngleDeg
+                || maxDeg != appliedMaxAngleDeg) {
+            setSoftLimitsDegrees(limits, minDeg, maxDeg);
+            appliedUseSoftLimits = limits;
+            appliedMinAngleDeg = minDeg;
+            appliedMaxAngleDeg = maxDeg;
+        }
+
+        double homeDeg = RobotConstants.Turret.HOME_ANGLE_DEGREES;
+        if (homeDeg != appliedHomeAngleDeg) {
+            setHomeAngle(Math.toRadians(homeDeg));
+            appliedHomeAngleDeg = homeDeg;
+        }
+
+        boolean leftReversed = RobotConstants.Turret.SERVO_LEFT_REVERSED;
+        boolean rightReversed = RobotConstants.Turret.SERVO_RIGHT_REVERSED;
+        boolean encoderReversed = RobotConstants.Turret.ENCODER_REVERSED;
+        if (leftReversed != appliedLeftReversed || rightReversed != appliedRightReversed
+                || encoderReversed != appliedEncoderReversed) {
+            if (leftReversed != appliedLeftReversed) {
+                leftServo.setDirection(leftReversed
+                        ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+            }
+            if (rightReversed != appliedRightReversed) {
+                rightServo.setDirection(rightReversed
+                        ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+            }
+            appliedLeftReversed = leftReversed;
+            appliedRightReversed = rightReversed;
+            appliedEncoderReversed = encoderReversed;
+
+            // A direction flag was edited, so forget the run-time servo flip that was made to
+            // compensate for the OLD flags (otherwise the fix and the flip cancel out), and
+            // clear a stop that came from the directions disagreeing. Re-read the angle first:
+            // ENCODER_REVERSED changes its sign, and the monitor must start from the new one.
+            servoSign = 1;
+            autoFlipCount = 0;
+            jogDirectionMismatch = false;
+            if (directionFault) {
+                encoderFault = false;
+                directionFault = false;
+            }
+            pidfController.reset();
+            currentAngleRad = readAngleRadians();
+            restartMonitor();
+        }
     }
 
     /**
@@ -427,6 +537,7 @@ public class TurretSubsystem {
      * @param currentPose current robot {@link Pose} from Pedro Pathing
      */
     public void update(Pose currentPose) {
+        applyLiveConfig();
         currentAngleRad = readAngleRadians();
         monitorTurret();
 
@@ -522,7 +633,7 @@ public class TurretSubsystem {
         // half of it. A filtered speed that hovers around ONE threshold would otherwise flip
         // the on-target output between zero power and feedforward every few loops.
         double targetSpeed = Math.abs(targetAngularVelocityRadSec);
-        double movingEnter = RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
+        double movingEnter = Math.toRadians(RobotConstants.Turret.TARGET_MOVING_THRESHOLD_DEG_SEC);
         targetMovingLatched = targetSpeed > (targetMovingLatched ? 0.5 * movingEnter : movingEnter);
         boolean targetMoving = targetMovingLatched;
 
@@ -549,8 +660,9 @@ public class TurretSubsystem {
         // onTarget still holds last loop's value here; every place that must forget it
         // (mode change, new target, stop, new zero) sets it to false.
         double absError = Math.abs(angleErrorRad);
-        double enterTolerance = RobotConstants.Turret.ANGLE_TOLERANCE_RADIANS;
-        double exitTolerance = Math.max(RobotConstants.Turret.ANGLE_EXIT_TOLERANCE_RADIANS,
+        double enterTolerance = Math.toRadians(RobotConstants.Turret.ANGLE_TOLERANCE_DEGREES);
+        double exitTolerance = Math.max(
+                Math.toRadians(RobotConstants.Turret.ANGLE_EXIT_TOLERANCE_DEGREES),
                 enterTolerance);
         onTarget = absError <= enterTolerance
                 || (onTarget && !targetMoving && absError <= exitTolerance);
@@ -588,7 +700,7 @@ public class TurretSubsystem {
                     boolean targetComingToTurret = velocitySign != errorSign
                             && Math.signum(rawTargetVelocityRadSec) == velocitySign
                             && Math.abs(rawTargetVelocityRadSec)
-                            > 0.5 * RobotConstants.Turret.TARGET_MOVING_THRESHOLD_RAD_SEC;
+                            > 0.5 * movingEnter;
                     // Turret AHEAD of a target that is still travelling toward it: wait for
                     // the target instead of kicking the turret backwards (that makes it
                     // chatter). Turret BEHIND the target: push with the minimum power.
@@ -1154,7 +1266,7 @@ public class TurretSubsystem {
                             + " encoder cable is not in THAT port's encoder socket (fix"
                             + " Turret.ENCODER_PORT; the init screen shows which port counts) or"
                             + " the turret cannot turn (jammed, or the minimum power is too weak:"
-                            + " Turret.SERVO_DEADBAND_POWER). Dpad Left/Right still jogs. G2 Dpad"
+                            + " raise Turret.MIN_COMMAND_POWER). Dpad Left/Right still jogs. G2 Dpad"
                             + " Down or Up retries.",
                     RobotConstants.Turret.ENCODER_PORT));
         }
@@ -1205,9 +1317,9 @@ public class TurretSubsystem {
     /**
      * @return true if the turret counts as aimed at the angle it was told to hold. It has
      *         hysteresis: it turns true once the error is inside
-     *         {@link RobotConstants.Turret#ANGLE_TOLERANCE_RADIANS} and, while the target is
+     *         {@link RobotConstants.Turret#ANGLE_TOLERANCE_DEGREES} and, while the target is
      *         not moving, stays true until the error exceeds
-     *         {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_RADIANS}.
+     *         {@link RobotConstants.Turret#ANGLE_EXIT_TOLERANCE_DEGREES}.
      *         In HOME mode that angle is the home angle, NOT the hive; use
      *         {@link #isAimedAtTarget()} to decide whether to shoot. False before the first
      *         update, whenever the turret is stopped, and from a target change until the

@@ -136,8 +136,8 @@ public class MainTeleOp extends OpMode {
         // Skipped entirely while FLOWER_SERVO_ENABLED is false.
         servoAtPositionB = false;
         if (FLOWER_SERVO_ENABLED) {
-            servo = hardwareMap.get(Servo.class, RobotConstants.Servo.NAME);
-            servo.setPosition(RobotConstants.Servo.POSITION_A);
+            servo = hardwareMap.get(Servo.class, RobotConstants.FlowerRamp.NAME);
+            servo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
         } else {
             servo = null;
         }
@@ -407,12 +407,15 @@ public class MainTeleOp extends OpMode {
             commandManualDrive(forward, strafe, turn);
         }
 
-        // ---- Two-position servo (Gamepad 1 A toggles) ----
-        if (servo != null && servoToggle.update(gamepad1.a)) {
-            servoAtPositionB = !servoAtPositionB;
+        // ---- Flower ramp servo (Gamepad 1 A toggles) ----
+        if (servo != null) {
+            if (servoToggle.update(gamepad1.a)) {
+                servoAtPositionB = !servoAtPositionB;
+            }
+            // Sent every loop so a position edited in Panels moves the servo right away.
             servo.setPosition(servoAtPositionB
-                    ? RobotConstants.Servo.POSITION_B
-                    : RobotConstants.Servo.POSITION_A);
+                    ? RobotConstants.FlowerRamp.POSITION_B
+                    : RobotConstants.FlowerRamp.POSITION_A);
         }
 
         // ---- Shoot balls (Gamepad 2 RT) ----
@@ -452,6 +455,7 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Telemetry ----
+        TuningGraph.send(outtake, intake);
         writeTelemetry(slowMode);
     }
 
@@ -632,7 +636,7 @@ public class MainTeleOp extends OpMode {
      *       is released and stays in MANUAL until Dpad Up or Down is pressed.</li>
      *   <li>Dpad Right (hold): the same, to the RIGHT.</li>
      *   <li>Dpad Up: face STRAIGHT AHEAD on the robot and hold that
-     *       ({@link RobotConstants.Turret#HOME_ANGLE_RADIANS}). Pressing it again changes
+     *       ({@link RobotConstants.Turret#HOME_ANGLE_DEGREES}). Pressing it again changes
      *       nothing.</li>
      *   <li>Dpad Down: TRACK the hive. The aim comes from the turret encoder angle and
      *       the hive position on the field, and the robot's field Y picks the top or
@@ -670,7 +674,7 @@ public class MainTeleOp extends OpMode {
             turret.setMode(TurretSubsystem.TurretMode.TRACKING);
         } else if (forwardPressed) {
             turret.clearFault();
-            turret.setHomeAngle(RobotConstants.Turret.HOME_ANGLE_RADIANS);
+            turret.setHomeAngle(Math.toRadians(RobotConstants.Turret.HOME_ANGLE_DEGREES));
             turret.setMode(TurretSubsystem.TurretMode.HOME);
         }
     }

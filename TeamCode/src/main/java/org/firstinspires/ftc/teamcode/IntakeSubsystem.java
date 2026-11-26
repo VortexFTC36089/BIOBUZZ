@@ -249,4 +249,13 @@ public class IntakeSubsystem {
     public TransferState getTransferState() {
         return transferState;
     }
+
+    /**
+     * Reads the transfer encoder.
+     *
+     * @return measured transfer speed in RPM, negative while running in reverse
+     */
+    public double getTransferRpm() {
+        return transferMotor.getVelocity() * 60.0 / RobotConstants.Intake.TRANSFER_TICKS_PER_REV;
+    }
 }

@@ -22,7 +22,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = RobotConstants.OpModeNames.AUTO_BOTTOM, group = "Autonomous",
+@Autonomous(name = "2_Tip_Auto", group = "Autonomous",
         preselectTeleOp = RobotConstants.OpModeNames.TELEOP_AFTER_AUTO)
 public class TestAuto extends LinearOpMode {
 
@@ -34,19 +34,106 @@ public class TestAuto extends LinearOpMode {
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
-    private final Pose start = poseFactory.of(56, 8, 90);
-    private final Pose point1 = poseFactory.of(35, 23, 180);
-    private final Pose point2 = poseFactory.of(10, 8, 180);
-    private final Pose point2Control1 = poseFactory.of(80, 11, 0);
-    private final Pose point3 = poseFactory.of(59, 133, 270);
-    private final Pose point3Control1 = poseFactory.of(23.1624, 126.5601, 0);
-    private final Pose point3Control2 = poseFactory.of(57.4142, 116.3339, 0);
+    // The path points. They come from RobotConstants.TestAutoPoints (editable in Panels) and
+    // are rebuilt by refreshPoints() while waiting for Play and when Play is pressed, so they
+    // are not final. Control points only use X and Y (a Bezier control point has no heading).
+    private Pose start;
+    private Pose point1;
+    private Pose point2;
+    private Pose point2Control1;
 
-    private final Pose point4 = poseFactory.of(20, 48, 180);
-    private final Pose point4Control1 = poseFactory.of(23, 94, 0);
-    private final Pose point5 = poseFactory.of(10, 48, 180);
+    private Pose point3;
+    private Pose point3Control1;
+    private Pose point3Control2;
 
-    private final Pose point6 = poseFactory.of(14, 95, 270);
+    private Pose point4;
+    private Pose point4Control1;
+    private Pose point4Control2;
+    private Pose point5;
+
+    private Pose point6;
+    private Pose park;
+
+    // The start pose last given to the follower, so an edit of it can be detected.
+    private boolean startApplied = false;
+    private double appliedStartX;
+    private double appliedStartY;
+    private double appliedStartHeadingDeg;
+
+    /** Rebuilds every point from the live values in {@link RobotConstants.TestAutoPoints}. */
+    private void refreshPoints() {
+        start = poseFactory.of(
+                RobotConstants.TestAutoPoints.START_X,
+                RobotConstants.TestAutoPoints.START_Y,
+                RobotConstants.TestAutoPoints.START_HEADING_DEG);
+        point1 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT1_X,
+                RobotConstants.TestAutoPoints.POINT1_Y,
+                RobotConstants.TestAutoPoints.POINT1_HEADING_DEG);
+        point2 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT2_X,
+                RobotConstants.TestAutoPoints.POINT2_Y,
+                RobotConstants.TestAutoPoints.POINT2_HEADING_DEG);
+        point2Control1 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT2_CONTROL1_X,
+                RobotConstants.TestAutoPoints.POINT2_CONTROL1_Y, 0);
+        point3 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT3_X,
+                RobotConstants.TestAutoPoints.POINT3_Y,
+                RobotConstants.TestAutoPoints.POINT3_HEADING_DEG);
+        point3Control1 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT3_CONTROL1_X,
+                RobotConstants.TestAutoPoints.POINT3_CONTROL1_Y, 0);
+        point3Control2 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT3_CONTROL2_X,
+                RobotConstants.TestAutoPoints.POINT3_CONTROL2_Y, 0);
+        point4 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT4_X,
+                RobotConstants.TestAutoPoints.POINT4_Y,
+                RobotConstants.TestAutoPoints.POINT4_HEADING_DEG);
+        point4Control1 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT4_CONTROL1_X,
+                RobotConstants.TestAutoPoints.POINT4_CONTROL1_Y, 0);
+        point4Control2 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT4_CONTROL2_X,
+                RobotConstants.TestAutoPoints.POINT4_CONTROL2_Y, 0);
+        point5 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT5_X,
+                RobotConstants.TestAutoPoints.POINT5_Y,
+                RobotConstants.TestAutoPoints.POINT5_HEADING_DEG);
+        point6 = poseFactory.of(
+                RobotConstants.TestAutoPoints.POINT6_X,
+                RobotConstants.TestAutoPoints.POINT6_Y,
+                RobotConstants.TestAutoPoints.POINT6_HEADING_DEG);
+        park = poseFactory.of(
+                RobotConstants.TestAutoPoints.PARK_X,
+                RobotConstants.TestAutoPoints.PARK_Y,
+                RobotConstants.TestAutoPoints.PARK_HEADING_DEG);
+    }
+
+    /**
+     * Re-reads the points from Panels and, the first time and whenever the START values
+     * were edited, gives the follower (and the TeleOp hand-off) the new start pose. The
+     * follower is only touched when the start changed, not on every loop.
+     */
+    private void syncStartPose() {
+        refreshPoints();
+        if (!startApplied
+                || RobotConstants.TestAutoPoints.START_X != appliedStartX
+                || RobotConstants.TestAutoPoints.START_Y != appliedStartY
+                || RobotConstants.TestAutoPoints.START_HEADING_DEG != appliedStartHeadingDeg) {
+            follower.setPose(start);
+            follower.update();
+            // Hand-off to TeleOp starts at the auto start pose, in case auto is
+            // stopped before it ever moves.
+            blackboard.put(RobotBlackboard.LAST_AUTO_POSE, start);
+            appliedStartX = RobotConstants.TestAutoPoints.START_X;
+            appliedStartY = RobotConstants.TestAutoPoints.START_Y;
+            appliedStartHeadingDeg = RobotConstants.TestAutoPoints.START_HEADING_DEG;
+            startApplied = true;
+        }
+    }
+
     // Autonomous routine
     public Command autoRoutine() {
         return sequential(
@@ -58,7 +145,7 @@ public class TestAuto extends LinearOpMode {
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
                 shootBalls(),
-                follow(follower, Paths.curve(point3, point4Control1, point4).linear(point3, point4)),
+                follow(follower, Paths.curve(point3, point4Control1, point4Control2, point4).linear(point3, point4)),
                 flowerPositionB(),
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
@@ -66,20 +153,22 @@ public class TestAuto extends LinearOpMode {
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
                 flowerPositionA(),
-                follow(follower, Paths.curve(point4, point4Control1, point3).linear(point4, point3)),
+                // Same curve driven backwards, so the control points are in reverse order.
+                follow(follower, Paths.curve(point4, point4Control2, point4Control1, point3).linear(point4, point3)),
                 shootBalls(),
-                follow(follower, Paths.line(point3, point6).linear(point3, point6))
+                follow(follower, Paths.line(point3, point6).linear(point3, point6)),
+                follow(follower, Paths.line(point6, park).linear(point6, park))
         );
     }
 
     /** Moves the flower servo to position A. */
     public Command flowerPositionA() {
-        return instant(() -> flowerServo.setPosition(RobotConstants.Servo.POSITION_A));
+        return instant(() -> flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A));
     }
 
     /** Moves the flower servo to position B. */
     public Command flowerPositionB() {
-        return instant(() -> flowerServo.setPosition(RobotConstants.Servo.POSITION_B));
+        return instant(() -> flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_B));
     }
 
     /** Starts both the intake and transfer motors. */
@@ -162,14 +251,12 @@ public class TestAuto extends LinearOpMode {
         Scheduler.reset();
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
-        flowerServo = hardwareMap.get(Servo.class, RobotConstants.Servo.NAME);
-        flowerServo.setPosition(RobotConstants.Servo.POSITION_A);
+        flowerServo = hardwareMap.get(Servo.class, RobotConstants.FlowerRamp.NAME);
+        flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
         follower = Constants.create(hardwareMap);
-        follower.setPose(start);
-        follower.update();
-        // Hand-off to TeleOp starts at the auto start pose, in case auto is
-        // stopped before it ever moves.
-        blackboard.put(RobotBlackboard.LAST_AUTO_POSE, start);
+        // Builds the points from Panels and gives the follower the start pose (and records
+        // it as the TeleOp hand-off pose in case auto is stopped before it ever moves).
+        syncStartPose();
 
         // Turret: built AFTER the follower, because its encoder is read through a
         // drive motor port (Turret.ENCODER_PORT). It tracks the hive from Play on.
@@ -188,8 +275,18 @@ public class TestAuto extends LinearOpMode {
                 break;
             }
             blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turret.getZeroOffsetTicks());
+            // Pick up path points edited in Panels (a changed start pose moves the follower).
+            syncStartPose();
+            // Same for the flower ramp's starting position.
+            flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
 
             telemetry.addLine("AutoPath Bottom ready");
+            telemetry.addLine("Path points: edit them in Panels (RobotConstants > TestAutoPoints)"
+                    + " before Play.");
+            telemetry.addData("Start X / Y / Heading", "%.1f in / %.1f in / %.1f deg",
+                    RobotConstants.TestAutoPoints.START_X,
+                    RobotConstants.TestAutoPoints.START_Y,
+                    RobotConstants.TestAutoPoints.START_HEADING_DEG);
             telemetry.addLine("Point the turret STRAIGHT FORWARD (same way as the robot)."
                     + " Its zero is taken when you press Play.");
             telemetry.addData("Turret encoder", "port '%s', ticks %d",
@@ -201,6 +298,8 @@ public class TestAuto extends LinearOpMode {
         if (isStopRequested()) {
             return;
         }
+        // Final read of the Panels values: every path below is built from them right now.
+        syncStartPose();
         schedule(autoRoutine());
 
         while (opModeIsActive()) {
@@ -234,7 +333,7 @@ public class TestAuto extends LinearOpMode {
 
             telemetry.update();
         }
-        flowerServo.setPosition(RobotConstants.Servo.POSITION_A);
+        flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
         turret.stop();
     }
 }

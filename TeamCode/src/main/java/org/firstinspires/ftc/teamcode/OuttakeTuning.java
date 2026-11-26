@@ -108,6 +108,8 @@ public class OuttakeTuning extends OpMode {
             outtake.stopMotor();
         }
         outtake.update();
+        // This tuner does not run the transfer, so no measured transfer RPM here.
+        TuningGraph.send(outtake, null);
 
         telemetry.addData("Tuner", running ? "RUNNING" : "STOPPED");
         telemetry.addData("Selected wheel", wheelIndex == 0 ? "LEFT" : "RIGHT");
