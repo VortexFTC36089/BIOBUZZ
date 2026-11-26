@@ -26,6 +26,14 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
         preselectTeleOp = RobotConstants.OpModeNames.TELEOP_AFTER_AUTO)
 public class TestAuto extends LinearOpMode {
 
+    /**
+     * Set to {@code true} to use the turret in this autonomous again. While {@code false}
+     * the turret servos and encoder are never touched, so the turret does not aim: point it
+     * straight forward by hand before Play. TeleOp then takes the turret zero at its own
+     * Init.
+     */
+    private static final boolean TURRET_ENABLED = false;
+
     private Follower follower;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
@@ -209,7 +217,8 @@ public class TestAuto extends LinearOpMode {
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
                 race(
-                        waitUntil(() -> turret.isAimedAtTarget() || turret.hasEncoderFault()),
+                        waitUntil(() -> turret == null
+                                || turret.isAimedAtTarget() || turret.hasEncoderFault()),
                         waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
@@ -260,21 +269,32 @@ public class TestAuto extends LinearOpMode {
 
         // Turret: built AFTER the follower, because its encoder is read through a
         // drive motor port (Turret.ENCODER_PORT). It tracks the hive from Play on.
-        turret = new TurretSubsystem(hardwareMap);
-        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        // Skipped entirely while TURRET_ENABLED is false.
+        if (TURRET_ENABLED) {
+            turret = new TurretSubsystem(hardwareMap);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        } else {
+            turret = null;
+            // Drop a turret zero left by an earlier autonomous so TeleOp does not use it.
+            blackboard.remove(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS);
+        }
 
         // While waiting for Play, keep declaring "where the turret points now" as
         // straight forward, so the zero is the one at the moment Play is pressed.
         // The turret must be facing the same way as the robot then. TeleOp restores
         // this zero, so it knows where the turret really points after autonomous.
         while (opModeInInit()) {
-            turret.resetAngle();
+            if (turret != null) {
+                turret.resetAngle();
+            }
             if (isStopRequested()) {
                 // Stop interrupts the hub read and the SDK then returns 0 instead of
                 // the real count. Keep the last good count.
                 break;
             }
-            blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turret.getZeroOffsetTicks());
+            if (turret != null) {
+                blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turret.getZeroOffsetTicks());
+            }
             // Pick up path points edited in Panels (a changed start pose moves the follower).
             syncStartPose();
             // Same for the flower ramp's starting position.
@@ -287,10 +307,15 @@ public class TestAuto extends LinearOpMode {
                     RobotConstants.TestAutoPoints.START_X,
                     RobotConstants.TestAutoPoints.START_Y,
                     RobotConstants.TestAutoPoints.START_HEADING_DEG);
-            telemetry.addLine("Point the turret STRAIGHT FORWARD (same way as the robot)."
-                    + " Its zero is taken when you press Play.");
-            telemetry.addData("Turret encoder", "port '%s', ticks %d",
-                    RobotConstants.Turret.ENCODER_PORT, turret.getEncoderTicks());
+            if (turret != null) {
+                telemetry.addLine("Point the turret STRAIGHT FORWARD (same way as the robot)."
+                        + " Its zero is taken when you press Play.");
+                telemetry.addData("Turret encoder", "port '%s', ticks %d",
+                        RobotConstants.Turret.ENCODER_PORT, turret.getEncoderTicks());
+            } else {
+                telemetry.addLine("Turret: DISABLED. It will not aim, so point it STRAIGHT"
+                        + " FORWARD by hand and leave it there for TeleOp.");
+            }
             telemetry.addData("TeleOp after this auto", RobotConstants.OpModeNames.TELEOP_AFTER_AUTO);
             telemetry.update();
             sleep(20);
@@ -311,14 +336,20 @@ public class TestAuto extends LinearOpMode {
             if (!isStopRequested()) {
                 blackboard.put(RobotBlackboard.LAST_AUTO_POSE, follower.pose());
                 // Aim at the hive; the robot's Y picks the top or bottom side.
-                turret.update(follower.pose());
+                if (turret != null) {
+                    turret.update(follower.pose());
+                }
             }
             Scheduler.execute();
             // Apply whatever the commands requested this loop to the hardware.
             intake.update();
             outtake.update();
 
-            turret.addTelemetry(telemetry);
+            if (turret != null) {
+                turret.addTelemetry(telemetry);
+            } else {
+                telemetry.addData("Turret", "DISABLED (TURRET_ENABLED = false)");
+            }
             telemetry.addData("x", follower.pose().x());
             telemetry.addData("y", follower.pose().y());
             telemetry.addData("heading", follower.pose().heading());
@@ -334,6 +365,8 @@ public class TestAuto extends LinearOpMode {
             telemetry.update();
         }
         flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
-        turret.stop();
+        if (turret != null) {
+            turret.stop();
+        }
     }
 }
