@@ -29,7 +29,6 @@ public class TestAuto extends LinearOpMode {
     private Follower follower;
     private IntakeSubsystem intake;
     private OuttakeSubsystem outtake;
-    private TurretSubsystem turret;
     private Servo flowerServo;
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
@@ -141,7 +140,7 @@ public class TestAuto extends LinearOpMode {
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(start, point1).linear(start, point1)),
                 follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)),
-                waitMs(500),
+                waitMs(1000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
                 shootBalls(),
@@ -149,15 +148,14 @@ public class TestAuto extends LinearOpMode {
                 flowerPositionB(),
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
-                waitMs(750),
+                waitMs(1000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
                 flowerPositionA(),
                 // Same curve driven backwards, so the control points are in reverse order.
                 follow(follower, Paths.curve(point4, point4Control2, point4Control1, point3).linear(point4, point3)),
                 shootBalls(),
-                follow(follower, Paths.line(point3, point6).linear(point3, point6)),
-                follow(follower, Paths.line(point6, park).linear(point6, park))
+                follow(follower, Paths.line(point3, park).linear(point3, park))
         );
     }
 
@@ -208,10 +206,6 @@ public class TestAuto extends LinearOpMode {
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
-                race(
-                        waitUntil(() -> turret.isAimedAtTarget() || turret.hasEncoderFault()),
-                        waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
-                ),
                 instant(() -> outtake.setGateOpen(true)),
                 waitMs(RobotConstants.Auto.GATE_OPEN_WAIT_MS),
                 instant(() -> {
@@ -242,7 +236,8 @@ public class TestAuto extends LinearOpMode {
                 instant(() -> {
                     intake.stop();
                     outtake.stop();
-                })
+                }),
+                instant(() -> outtake.setGateOpen(false))
         );
     }
 
@@ -258,23 +253,16 @@ public class TestAuto extends LinearOpMode {
         // it as the TeleOp hand-off pose in case auto is stopped before it ever moves).
         syncStartPose();
 
-        // Turret: built AFTER the follower, because its encoder is read through a
-        // drive motor port (Turret.ENCODER_PORT). It tracks the hive from Play on.
-        turret = new TurretSubsystem(hardwareMap);
-        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
-
         // While waiting for Play, keep declaring "where the turret points now" as
         // straight forward, so the zero is the one at the moment Play is pressed.
         // The turret must be facing the same way as the robot then. TeleOp restores
         // this zero, so it knows where the turret really points after autonomous.
         while (opModeInInit()) {
-            turret.resetAngle();
             if (isStopRequested()) {
                 // Stop interrupts the hub read and the SDK then returns 0 instead of
                 // the real count. Keep the last good count.
                 break;
             }
-            blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turret.getZeroOffsetTicks());
             // Pick up path points edited in Panels (a changed start pose moves the follower).
             syncStartPose();
             // Same for the flower ramp's starting position.
@@ -289,8 +277,6 @@ public class TestAuto extends LinearOpMode {
                     RobotConstants.TestAutoPoints.START_HEADING_DEG);
             telemetry.addLine("Point the turret STRAIGHT FORWARD (same way as the robot)."
                     + " Its zero is taken when you press Play.");
-            telemetry.addData("Turret encoder", "port '%s', ticks %d",
-                    RobotConstants.Turret.ENCODER_PORT, turret.getEncoderTicks());
             telemetry.addData("TeleOp after this auto", RobotConstants.OpModeNames.TELEOP_AFTER_AUTO);
             telemetry.update();
             sleep(20);
@@ -311,14 +297,12 @@ public class TestAuto extends LinearOpMode {
             if (!isStopRequested()) {
                 blackboard.put(RobotBlackboard.LAST_AUTO_POSE, follower.pose());
                 // Aim at the hive; the robot's Y picks the top or bottom side.
-                turret.update(follower.pose());
             }
             Scheduler.execute();
             // Apply whatever the commands requested this loop to the hardware.
             intake.update();
             outtake.update();
 
-            turret.addTelemetry(telemetry);
             telemetry.addData("x", follower.pose().x());
             telemetry.addData("y", follower.pose().y());
             telemetry.addData("heading", follower.pose().heading());
@@ -334,6 +318,5 @@ public class TestAuto extends LinearOpMode {
             telemetry.update();
         }
         flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
-        turret.stop();
     }
 }

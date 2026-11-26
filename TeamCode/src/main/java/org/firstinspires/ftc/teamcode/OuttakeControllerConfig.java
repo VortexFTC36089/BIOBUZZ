@@ -18,14 +18,14 @@ public final class OuttakeControllerConfig {
     /** Feedforward voltage per RPM. */
     public static double LEFT_KV_VOLTS_PER_RPM = 0.001949;
     /** Feedback voltage per RPM of velocity error. */
-    public static double LEFT_KP_VOLTS_PER_RPM = 0.045;
+    public static double LEFT_KP_VOLTS_PER_RPM = 0.031;
 
     /** Static feedforward voltage, in volts. */
     public static double RIGHT_KS_VOLTS = .84;
     /** Feedforward voltage per RPM. */
     public static double RIGHT_KV_VOLTS_PER_RPM = 0.001971;
     /** Feedback voltage per RPM of velocity error. */
-    public static double RIGHT_KP_VOLTS_PER_RPM = 0.045;
+    public static double RIGHT_KP_VOLTS_PER_RPM = 0.031;
 
     /** Maximum normalized motor power in [0, 1]. */
     public static double MAX_OUTPUT = 1.0;

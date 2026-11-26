@@ -455,7 +455,6 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Telemetry ----
-        TuningGraph.send(outtake, intake);
         writeTelemetry(slowMode);
     }
 

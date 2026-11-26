@@ -156,7 +156,7 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static double TRANSFER_TARGET_RPM = 1850;
+        public static double TRANSFER_TARGET_RPM = 2000;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
@@ -227,7 +227,7 @@ public final class RobotConstants {
          * Fixed flywheel RPM used whenever the outtake is spun up.
          */
         // TODO(team): tune so pieces score cleanly
-        public static double TARGET_RPM = 1911.5;
+        public static double TARGET_RPM = 1950;
         /** Alternate target used by the outtake tuning OpMode; tune for the second shot mode. */
         public static double SECONDARY_TARGET_RPM = 1300;
         /**
@@ -242,8 +242,8 @@ public final class RobotConstants {
          */
         public static final String GATE_SERVO = "outtake_gate";
         // TODO(team): set both gate positions on the robot (0.0 to 1.0)
-        public static double GATE_CLOSED_POSITION = .5;
-        public static double GATE_OPEN_POSITION = .775;
+        public static double GATE_CLOSED_POSITION = .58;
+        public static double GATE_OPEN_POSITION = .72;
     }
 
 
@@ -698,11 +698,11 @@ public final class RobotConstants {
 
         /** Time given to the gate servo to finish opening before balls are fed. */
         // TODO(team): tune on the robot
-        public static final double GATE_OPEN_WAIT_MS = 700.0;
+        public static final double GATE_OPEN_WAIT_MS = 800.0;
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 1200.0;
+        public static final double FEED_TIME_MS = 1700.0;
     }
 
     /**
@@ -759,38 +759,38 @@ public final class RobotConstants {
         public static double POINT1_HEADING_DEG = 180;
 
         // ---- Point 2: curve from point 1, heading held at the point 2 heading ----
-        public static double POINT2_X = 10;
-        public static double POINT2_Y = 8;
+        public static double POINT2_X = 16;
+        public static double POINT2_Y = 14;
         public static double POINT2_HEADING_DEG = 180;
         /** Bezier control point of the point 1 -> point 2 curve. */
         public static double POINT2_CONTROL1_X = 80;
-        public static double POINT2_CONTROL1_Y = 11;
+        public static double POINT2_CONTROL1_Y = 20;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
         public static double POINT3_X = 59;
-        public static double POINT3_Y = 133;
+        public static double POINT3_Y = 139;
         public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
-        public static double POINT3_CONTROL1_X = 29;
+        public static double POINT3_CONTROL1_X = 37;
         public static double POINT3_CONTROL1_Y = 122;
         /** Second Bezier control point of the point 2 -> point 3 curve. */
-        public static double POINT3_CONTROL2_X = 59;
+        public static double POINT3_CONTROL2_X = 50;
         public static double POINT3_CONTROL2_Y = 115;
 
         // ---- Point 4: curve from point 3; also the start of the point 4 -> point 3 return ----
-        public static double POINT4_X = 20;
-        public static double POINT4_Y = 48;
+        public static double POINT4_X = 35;
+        public static double POINT4_Y = 53;
         public static double POINT4_HEADING_DEG = 180;
         /** First Bezier control point of the point 3 -> point 4 curve (last on the way back). */
-        public static double POINT4_CONTROL1_X = 58;
+        public static double POINT4_CONTROL1_X = 53;
         public static double POINT4_CONTROL1_Y = 115;
         /** Second Bezier control point of the point 3 -> point 4 curve (first on the way back). */
         public static double POINT4_CONTROL2_X = 31;
         public static double POINT4_CONTROL2_Y = 122;
 
         // ---- Point 5: straight line from point 4 and back ----
-        public static double POINT5_X = 17;
-        public static double POINT5_Y = 48;
+        public static double POINT5_X = 20;
+        public static double POINT5_Y = 53;
         public static double POINT5_HEADING_DEG = 180;
 
         // ---- Point 6: straight line from point 3 ----
