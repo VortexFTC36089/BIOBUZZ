@@ -156,7 +156,7 @@ public final class RobotConstants {
          * Target velocity in RPM for the transfer motor when using encoder velocity control.
          */
         // TODO(team): tune transfer target RPM on the robot
-        public static double TRANSFER_TARGET_RPM = 2000;
+        public static double TRANSFER_TARGET_RPM = 1700;
 
         /**
          * Velocity PIDF coefficients applied to the transfer motor in
@@ -522,10 +522,10 @@ public final class RobotConstants {
          * center-origin -72 to 72 frame). Every turret target must be given in this frame.
          */
         // TODO(team): replace these placeholders with the real hive coordinates (read them in the Pedro visualizer)
-        public static double TOP_TARGET_X_INCHES = 57.0;
-        public static double TOP_TARGET_Y_INCHES = 84.0;
-        public static double BOTTOM_TARGET_X_INCHES = 57.0;
-        public static double BOTTOM_TARGET_Y_INCHES = 60.0;
+        public static double TOP_TARGET_X_INCHES = 58;
+        public static double TOP_TARGET_Y_INCHES = 94.0;
+        public static double BOTTOM_TARGET_X_INCHES = 58;
+        public static double BOTTOM_TARGET_Y_INCHES = 53;
 
         /** Y position (inches) where the aimed side switches; 72 is the middle of a 144-inch field. */
         public static double SIDE_SWITCH_Y_INCHES = 72.0;

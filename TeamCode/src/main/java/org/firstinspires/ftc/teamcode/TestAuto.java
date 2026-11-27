@@ -149,7 +149,7 @@ public class TestAuto extends LinearOpMode {
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(start, point1).linear(start, point1)),
                 follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)),
-                waitMs(500),
+                waitMs(1000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
                 shootBalls(),
@@ -157,15 +157,14 @@ public class TestAuto extends LinearOpMode {
                 flowerPositionB(),
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
-                waitMs(750),
+                waitMs(1000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
                 flowerPositionA(),
                 // Same curve driven backwards, so the control points are in reverse order.
                 follow(follower, Paths.curve(point4, point4Control2, point4Control1, point3).linear(point4, point3)),
                 shootBalls(),
-                follow(follower, Paths.line(point3, point6).linear(point3, point6)),
-                follow(follower, Paths.line(point6, park).linear(point6, park))
+                follow(follower, Paths.line(point3, park).linear(point3, park))
         );
     }
 
@@ -211,7 +210,7 @@ public class TestAuto extends LinearOpMode {
      */
     public Command TrackShootBalls() {
         return sequential(
-                instant(() -> outtake.outtakeFrom(follower.pose())),
+                instant(() -> outtake.outtake()),
                 race(
                         waitUntil(() -> outtake.atSpeed()),
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
@@ -250,7 +249,8 @@ public class TestAuto extends LinearOpMode {
                 instant(() -> {
                     intake.stop();
                     outtake.stop();
-                })
+                }),
+                instant(() -> outtake.setGateOpen(false))
         );
     }
 

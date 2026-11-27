@@ -14,16 +14,16 @@ import com.bylazar.configurables.annotations.Configurable;
 public final class OuttakeControllerConfig {
 
     /** Static feedforward voltage, in volts. */
-    public static double LEFT_KS_VOLTS = .89;
+    public static double LEFT_KS_VOLTS = 1.37;
     /** Feedforward voltage per RPM. */
-    public static double LEFT_KV_VOLTS_PER_RPM = 0.001949;
+    public static double LEFT_KV_VOLTS_PER_RPM = 0.001849;
     /** Feedback voltage per RPM of velocity error. */
     public static double LEFT_KP_VOLTS_PER_RPM = 0.031;
 
     /** Static feedforward voltage, in volts. */
-    public static double RIGHT_KS_VOLTS = .84;
+    public static double RIGHT_KS_VOLTS = 2.04;
     /** Feedforward voltage per RPM. */
-    public static double RIGHT_KV_VOLTS_PER_RPM = 0.001971;
+    public static double RIGHT_KV_VOLTS_PER_RPM = 0.001872;
     /** Feedback voltage per RPM of velocity error. */
     public static double RIGHT_KP_VOLTS_PER_RPM = 0.031;
 

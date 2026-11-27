@@ -70,10 +70,10 @@ public final class ShooterRPMTable {
     // KP is in volts per RPM of error. An RPM or KP of 0 = not tuned yet (ignored).
 
     // Point 1: start position, back against the wall.
-    public static double POINT1_X = 56;
-    public static double POINT1_Y = 8;
-    public static double POINT1_RPM = 1950;
-    public static double POINT1_KP = 0.031;
+    public static double POINT1_X = 58;
+    public static double POINT1_Y = 12;
+    public static double POINT1_RPM = 1995;
+    public static double POINT1_KP = 0.0313;
 
     // Point 2: corner.
     // TODO(team): tune on the robot
