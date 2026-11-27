@@ -77,8 +77,8 @@ public final class ShooterRPMTable {
 
     // Point 2: corner.
     // TODO(team): tune on the robot
-    public static double POINT2_X = 14;
-    public static double POINT2_Y = 14;
+    public static double POINT2_X = 16;
+    public static double POINT2_Y = 16;
     public static double POINT2_RPM = 0;
     public static double POINT2_KP = 0;
 

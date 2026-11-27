@@ -736,7 +736,7 @@ public final class RobotConstants {
 
         /** How long the intake and transfer run to feed every ball into the flywheels. */
         // TODO(team): tune on the robot (long enough for all balls to leave)
-        public static final double FEED_TIME_MS = 1700.0;
+        public static final double FEED_TIME_MS = 700.0;
     }
 
     /**
@@ -803,8 +803,8 @@ public final class RobotConstants {
         public static double POINT2_CONTROL1_Y = 20;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
-        public static double POINT3_X = 59;
-        public static double POINT3_Y = 139;
+        public static double POINT3_X = 58;
+        public static double POINT3_Y = 130;
         public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
         public static double POINT3_CONTROL1_X = 37;
