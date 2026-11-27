@@ -32,7 +32,25 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  * shrinks, and the servos would turn the turret in circles forever. This class therefore
  * watches the count whenever it drives the servos and stops them with a message on the
  * Driver Station when the count does not follow. MANUAL jog is open-loop and keeps
- * working without the encoder.
+ * working without the encoder. A single reading that jumps farther than the turret could
+ * possibly have turned is ignored (see
+ * {@link RobotConstants.Turret#ENCODER_MAX_JUMP_DEGREES}).
+ *
+ * <h3>Hybrid controller</h3>
+ * The servos are continuous-rotation, so power sets a SPEED, not a position: the encoder
+ * closes the loop on every update. {@code calculateHybridPower} takes the direction from
+ * the sign of the angle error and the amount of power from its size:
+ * <ul>
+ *   <li><b>Far</b> (beyond {@link RobotConstants.Turret#FAR_ERROR_DEGREES}):
+ *       {@link RobotConstants.Turret#FAR_POWER}.</li>
+ *   <li><b>Slowing down</b>: a continuous curve from FAR_POWER to
+ *       {@link RobotConstants.Turret#FINE_POWER}.</li>
+ *   <li><b>Fine</b> (inside {@link RobotConstants.Turret#FINE_ERROR_DEGREES}): from
+ *       FINE_POWER down to {@link RobotConstants.Turret#MIN_COMMAND_POWER}.</li>
+ *   <li><b>On target</b>: no power, unless the target is moving.</li>
+ * </ul>
+ * While the target is moving, velocity feedforward is added so the turret keeps up with it.
+ * There is no integral or derivative term.
  *
  * <h3>Settling (no jitter at the target)</h3>
  * The turret has a minimum correction power (a servo cannot move at less than its dead
@@ -68,109 +86,18 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  * Every tunable value in {@link RobotConstants.Turret} is a non-final static field, and
  * {@code RobotConstants.Turret} is {@code @Configurable}, so Panels can change it while an
  * OpMode runs. Most values are read from there on every loop. The few this class keeps a
- * working copy of (extra controller gains, pivot offset, soft limits, home angle and the
+ * working copy of (feedforward gains, pivot offset, soft limits, home angle and the
  * direction flags) are picked up by {@code applyLiveConfig()} at the start of
  * {@link #update(Pose)} and {@link #refresh()}.
  */
 public class TurretSubsystem {
 
-    /**
-     * Turret power controller. The main term is NOT a plain proportional gain: it is the
-     * turning speed profile from {@link TurretSubsystem#approachPower(double)} (full power
-     * far away, then a tunable slow-down). On top of that this class adds the optional
-     * integral and derivative terms and the velocity feedforward (kV), and it holds the
-     * breakaway power (kF) used when only keeping pace with a moving target.
-     */
-    public static class PIDFController {
-        private double kI;
-        private double kD;
-        private double kF;
-        private double integralSum = 0.0;
-        private double prevError = 0.0;
-        private boolean firstUpdate = true;
-        private final ElapsedTime timer = new ElapsedTime();
-
-        public PIDFController(double kI, double kD, double kF) {
-            this.kI = kI;
-            this.kD = kD;
-            this.kF = kF;
-            timer.reset();
-        }
-
-        /**
-         * @param angleError           signed angle error, radians (target minus measured)
-         * @param approachPower        signed power from the turning speed profile for this error
-         * @param targetVelocityRadSec target angular velocity, radians/second
-         * @param kV                   velocity feedforward gain (power per rad/s)
-         * @return servo power, not yet clipped
-         */
-        public double calculate(double angleError, double approachPower,
-                                double targetVelocityRadSec, double kV) {
-            double dt = timer.seconds();
-            timer.reset();
-
-            if (firstUpdate || dt <= 0.0 || dt > 0.5) {
-                dt = 0.0;
-                firstUpdate = false;
-            }
-
-            if (dt > 0.0 && kI != 0.0) {
-                // Read live so Panels can change the limit while running.
-                double maxIntegral = RobotConstants.Turret.MAX_INTEGRAL;
-                integralSum = Range.clip(integralSum + angleError * dt, -maxIntegral, maxIntegral);
-            }
-            double iTerm = kI * integralSum;
-
-            double derivative = (dt > 0.0) ? (angleError - prevError) / dt : 0.0;
-            double dTerm = kD * derivative;
-            prevError = angleError;
-
-            double vTerm = kV * targetVelocityRadSec;
-
-            return approachPower + iTerm + dTerm + vTerm;
-        }
-
-        /**
-         * Power needed just to keep pace with a target moving at the given speed, with no
-         * correction for angle error: velocity feedforward plus the breakaway power in the
-         * direction of travel. Used while the turret is already inside tolerance.
-         *
-         * @param targetVelocityRadSec target angular velocity, radians/second
-         * @param kV                   velocity feedforward gain (power per rad/s)
-         * @return servo power, not yet clipped
-         */
-        public double feedforward(double targetVelocityRadSec, double kV) {
-            return kV * targetVelocityRadSec + Math.signum(targetVelocityRadSec) * kF;
-        }
-
-        public void setGains(double kI, double kD, double kF) {
-            this.kI = kI;
-            this.kD = kD;
-            this.kF = kF;
-        }
-
-        public void reset() {
-            integralSum = 0.0;
-            prevError = 0.0;
-            firstUpdate = true;
-            timer.reset();
-        }
-
-        /**
-         * Restarts the loop timing but KEEPS the integral. Call while the PID output is
-         * not being used (turret aimed) so the next {@link #calculate} does not see a
-         * stale time step.
-         */
-        public void resetTiming() {
-            firstUpdate = true;
-            timer.reset();
-        }
-    }
+    /** Slack on the soft-limit comparison, so a target ON a limit is not read as past it. */
+    private static final double LIMIT_EPSILON_RAD = 1e-9;
 
     private final CRServo leftServo;
     private final CRServo rightServo;
     private final DcMotorEx turretEncoder;
-    private final PIDFController pidfController;
     private final ElapsedTime targetVelTimer = new ElapsedTime();
 
     /** High-level turret operating mode. */
@@ -258,7 +185,13 @@ public class TurretSubsystem {
     /** False until the side has been picked from a real pose (then hysteresis applies). */
     private boolean sideChosen = false;
 
+    // Feedforward: power per rad/s of target motion, and the breakaway power.
     private double kV = RobotConstants.Turret.KV;
+    private double kF = RobotConstants.Turret.KF;
+    /** Rate-limited velocity feedforward power applied on the last update. */
+    private double feedforwardPower = 0.0;
+    /** True if the last encoder reading was ignored as impossible. */
+    private boolean readingRejected = false;
 
     // Internal tracking state
     private double previousTargetAngleRad = 0.0;
@@ -297,8 +230,6 @@ public class TurretSubsystem {
     // copy of are re-applied by applyLiveConfig(), but only when the configured value
     // CHANGED since the last look, so the setters (setGains, setMountingOffset, ...) keep
     // working until somebody edits the matching value in Panels.
-    private double appliedKi = RobotConstants.Turret.KI;
-    private double appliedKd = RobotConstants.Turret.KD;
     private double appliedKf = RobotConstants.Turret.KF;
     private double appliedKv = RobotConstants.Turret.KV;
     private double appliedOffsetX = RobotConstants.Turret.OFFSET_X_INCHES;
@@ -337,11 +268,6 @@ public class TurretSubsystem {
         resetAngle();
         ticksAtConstruction = lastEncoderTicks;
 
-        pidfController = new PIDFController(
-                RobotConstants.Turret.KI,
-                RobotConstants.Turret.KD,
-                RobotConstants.Turret.KF
-        );
         targetVelTimer.reset();
     }
 
@@ -438,15 +364,11 @@ public class TurretSubsystem {
      * {@link RobotConstants.Turret} wherever it is used.
      */
     private void applyLiveConfig() {
-        double ki = RobotConstants.Turret.KI;
-        double kd = RobotConstants.Turret.KD;
         double kf = RobotConstants.Turret.KF;
         double kv = RobotConstants.Turret.KV;
-        if (ki != appliedKi || kd != appliedKd || kf != appliedKf || kv != appliedKv) {
-            pidfController.setGains(ki, kd, kf);
+        if (kf != appliedKf || kv != appliedKv) {
+            this.kF = kf;
             this.kV = kv;
-            appliedKi = ki;
-            appliedKd = kd;
             appliedKf = kf;
             appliedKv = kv;
         }
@@ -504,7 +426,7 @@ public class TurretSubsystem {
                 encoderFault = false;
                 directionFault = false;
             }
-            pidfController.reset();
+            feedforwardPower = 0.0;
             currentAngleRad = readAngleRadians();
             restartMonitor();
         }
@@ -531,14 +453,44 @@ public class TurretSubsystem {
     }
 
     /**
+     * Reads the encoder into {@link #currentAngleRad} for the control loop.
+     *
+     * <p>A change since the last loop that is larger than the turret could have turned, plus
+     * {@link RobotConstants.Turret#ENCODER_MAX_JUMP_DEGREES}, is treated as a bad read and
+     * the previous angle is kept. Only ONE reading in a row is ignored: if the next one
+     * still says so, it is believed, so this can never lock the angle.
+     *
+     * @return false if no usable angle can be computed (a zero or non-numeric
+     *         {@link RobotConstants.Turret#ENCODER_TO_TURRET_RATIO}); the angle is then
+     *         left unchanged and HOME / TRACKING must not drive
+     */
+    private boolean measureAngle() {
+        double reading = readAngleRadians();
+        if (!isFinite(reading) || RobotConstants.Turret.ENCODER_TO_TURRET_RATIO == 0.0) {
+            return false;
+        }
+        double margin = RobotConstants.Turret.ENCODER_MAX_JUMP_DEGREES;
+        double seconds = Math.min(monitorLoopTimer.seconds(), 0.5);
+        double possible = Math.toRadians(margin)
+                + RobotConstants.Turret.RAD_PER_SEC_AT_FULL_POWER * seconds;
+        if (margin > 0.0 && !readingRejected && Math.abs(reading - currentAngleRad) > possible) {
+            readingRejected = true;
+            return true;
+        }
+        readingRejected = false;
+        currentAngleRad = reading;
+        return true;
+    }
+
+    /**
      * Call once per loop. Computes the chassis-relative angle to the target from the
-     * Pedro pose and drives the servos with PIDF control on the encoder angle.
+     * Pedro pose and drives the servos with the hybrid controller on the encoder angle.
      *
      * @param currentPose current robot {@link Pose} from Pedro Pathing
      */
     public void update(Pose currentPose) {
         applyLiveConfig();
-        currentAngleRad = readAngleRadians();
+        boolean angleValid = measureAngle();
         monitorTurret();
 
         if (!enabled || mode == TurretMode.DISABLED) {
@@ -564,7 +516,7 @@ public class TurretSubsystem {
 
         // HOME and TRACKING aim with the measured angle. Without a working measurement
         // they would only spin the turret, so they stay stopped until the fault is cleared.
-        if (encoderFault) {
+        if (encoderFault || !angleValid) {
             stop();
             return;
         }
@@ -615,7 +567,9 @@ public class TurretSubsystem {
         double dt = targetVelTimer.seconds();
         targetVelTimer.reset();
         double maxVelocity = RobotConstants.Turret.RAD_PER_SEC_AT_FULL_POWER;
+        double feedforwardDt = 0.0; // stays 0 when this interval cannot be used
         if (!firstTargetSample && dt > 1e-4 && dt <= 0.5) {
+            feedforwardDt = dt;
             double rawVelocity = Range.clip(
                     AngleUnit.normalizeRadians(relativeTargetAngleRad - previousTargetAngleRad) / dt,
                     -maxVelocity, maxVelocity);
@@ -644,9 +598,9 @@ public class TurretSubsystem {
         // Don't let the shortest path cross the mechanical limits (cable wrap)
         if (useSoftLimits) {
             double unwrappedTarget = currentAngleRad + angleErrorRad;
-            if (unwrappedTarget > maxAngleRadians) {
+            if (unwrappedTarget > maxAngleRadians + LIMIT_EPSILON_RAD) {
                 angleErrorRad -= 2.0 * Math.PI;
-            } else if (unwrappedTarget < minAngleRadians) {
+            } else if (unwrappedTarget < minAngleRadians - LIMIT_EPSILON_RAD) {
                 angleErrorRad += 2.0 * Math.PI;
             }
         }
@@ -667,49 +621,8 @@ public class TurretSubsystem {
         onTarget = absError <= enterTolerance
                 || (onTarget && !targetMoving && absError <= exitTolerance);
 
-        double power;
-        if (onTarget) {
-            // Aimed. The PID is idle here: restart its timing but keep the integral, so a
-            // slowly moving target does not restart the controller from zero every time
-            // the turret catches up.
-            pidfController.resetTiming();
-            if (targetMoving) {
-                // The target is still sweeping (chassis turning or driving past the hive).
-                // Keep pace with feedforward instead of stopping dead, otherwise the
-                // turret stops, falls behind, jumps and stops again.
-                power = pidfController.feedforward(targetAngularVelocityRadSec, kV);
-            } else {
-                power = 0.0;
-            }
-        } else {
-            // Main term: the turning speed profile (flat out far away, then slow down).
-            power = pidfController.calculate(angleErrorRad, approachPower(angleErrorRad),
-                    targetAngularVelocityRadSec, kV);
-
-            // Never leave the turret outside tolerance with a correction too weak to move
-            // it. Only a WEAK command (below the minimum power) is touched here.
-            double minPower = RobotConstants.Turret.MIN_COMMAND_POWER;
-            if (Math.abs(power) < minPower) {
-                double errorSign = Math.signum(angleErrorRad);
-                if (!targetMoving) {
-                    // Target standing still: always push toward it with the minimum power.
-                    power = errorSign * minPower;
-                } else if (Math.signum(power) == errorSign) {
-                    // Target moving and the controller wants a weak push toward it.
-                    double velocitySign = Math.signum(targetAngularVelocityRadSec);
-                    boolean targetComingToTurret = velocitySign != errorSign
-                            && Math.signum(rawTargetVelocityRadSec) == velocitySign
-                            && Math.abs(rawTargetVelocityRadSec)
-                            > 0.5 * movingEnter;
-                    // Turret AHEAD of a target that is still travelling toward it: wait for
-                    // the target instead of kicking the turret backwards (that makes it
-                    // chatter). Turret BEHIND the target: push with the minimum power.
-                    power = targetComingToTurret ? 0.0 : errorSign * minPower;
-                }
-                // else: moving target and the controller asks for the other direction
-                // (velocity feedforward). Leave that command alone.
-            }
-        }
+        double power = calculateHybridPower(angleErrorRad, targetAngularVelocityRadSec,
+                feedforwardDt);
 
         // Hard cutoff if already at/beyond a soft limit and still pushing outward
         if (useSoftLimits) {
@@ -724,48 +637,128 @@ public class TurretSubsystem {
     }
 
     /**
-     * Turning speed profile: the servo power for a given distance from the target.
+     * The hybrid controller: one servo power from the angle error and the target's motion.
+     * Uses {@link #onTarget}, {@link #targetMovingLatched} and the unfiltered target speed,
+     * which {@link #driveToRelativeAngle} updates first. The caller applies the soft limits
+     * and the MAX_POWER cap to the result.
      *
-     * <ul>
-     *   <li>Farther than {@link RobotConstants.Turret#SLOWDOWN_START_DEGREES}: full
-     *       {@link RobotConstants.Turret#MAX_POWER}, so big moves are as fast as possible.</li>
-     *   <li>Closer than that: the power drops by
-     *       {@link RobotConstants.Turret#SLOWDOWN_POWER_PER_DEGREE} for every degree closer
-     *       to the target, so the turret brakes before it arrives.</li>
-     *   <li>It never drops below {@link RobotConstants.Turret#MIN_COMMAND_POWER}, the
-     *       smallest power the code uses to correct toward the target (the servo dead
-     *       zone plus a margin).</li>
-     *   <li>Safety rule: the slow-down is never gentler than what it takes to reach that
-     *       minimum power by the time the turret arrives. A ramp that arrives hotter makes
-     *       the turret swing back and forth across the target without stopping, so a
-     *       rate that is too small for the chosen zone and MAX_POWER is steepened here.</li>
-     * </ul>
-     *
-     * @param angleErrorRad signed angle error, radians (target minus measured)
-     * @return signed servo power pointing toward the target
+     * @param errorRad             signed angle error, radians (target minus measured,
+     *                             already wrapped to the way the turret should go)
+     * @param targetVelocityRadSec filtered target angular velocity, radians/second
+     * @param dt                   seconds since the previous call, or 0 if unusable
+     * @return servo power, + = counterclockwise
      */
-    private static double approachPower(double angleErrorRad) {
+    private double calculateHybridPower(double errorRad, double targetVelocityRadSec, double dt) {
+        double feedforward = updateFeedforward(targetVelocityRadSec, dt);
+
+        if (onTarget) {
+            // Hold. Stationary target: no power at all. A target that is still sweeping
+            // (chassis turning or driving past the hive): only keep pace with it, otherwise
+            // the turret stops, falls behind, jumps and stops again.
+            if (!RobotConstants.Turret.USE_FEEDFORWARD || !targetMovingLatched) {
+                return 0.0;
+            }
+            return feedforward + Math.signum(targetVelocityRadSec) * kF;
+        }
+
+        double errorSign = Math.signum(errorRad);
+        double power = errorSign * correctionPower(Math.abs(errorRad)) + feedforward;
+
+        // The correction alone is never weaker than the minimum power, so a weak push toward
+        // the target means feedforward is opposing it: the turret is AHEAD of a target that
+        // is travelling toward it. Wait for the target instead of creeping or kicking (that
+        // chatters). If the target has really stopped and only the filtered speed lags
+        // behind, push with the minimum power so the command can still move the turret.
+        double minPower = minimumPower();
+        if (Math.abs(power) < minPower && Math.signum(power) == errorSign) {
+            power = isTargetApproaching(errorSign) ? 0.0 : errorSign * minPower;
+        }
+        return power;
+    }
+
+    /**
+     * Power that corrects an angle error, from its size alone. Continuous: no step between
+     * the zones. See the diagram at {@link RobotConstants.Turret#FAR_ERROR_DEGREES}.
+     * Values set out of order in Panels are clamped so that
+     * minimum &lt;= fine &lt;= far &lt;= MAX_POWER.
+     *
+     * @param absErrorRad size of the angle error, radians
+     * @return unsigned servo power
+     */
+    private static double correctionPower(double absErrorRad) {
         double maxPower = RobotConstants.Turret.MAX_POWER;
-        // Guard against MAX_POWER being set below the minimum during first tests.
-        double minPower = Math.min(RobotConstants.Turret.MIN_COMMAND_POWER, maxPower);
+        double minPower = minimumPower();
+        double finePower = Range.clip(RobotConstants.Turret.FINE_POWER, minPower, maxPower);
+        double farPower = Range.clip(RobotConstants.Turret.FAR_POWER, finePower, maxPower);
 
-        double startDeg = RobotConstants.Turret.SLOWDOWN_START_DEGREES;
-        double rate = RobotConstants.Turret.SLOWDOWN_POWER_PER_DEGREE;
-        if (startDeg > 0.0) {
-            // A ramp too gentle for this zone and MAX_POWER would arrive above the minimum
-            // power and swing across the target forever. Steepen it so the power always
-            // gets down to the minimum by the time the turret reaches the target.
-            rate = Math.max(rate, (maxPower - minPower) / startDeg);
+        double tolerance = Math.max(0.0, RobotConstants.Turret.ANGLE_TOLERANCE_DEGREES);
+        double fineStart = Math.max(RobotConstants.Turret.FINE_ERROR_DEGREES, tolerance);
+        double farStart = Math.max(RobotConstants.Turret.FAR_ERROR_DEGREES, fineStart);
+        double error = Math.toDegrees(absErrorRad);
+
+        if (error >= farStart) {
+            return farPower;
         }
-
-        double distanceDeg = Math.toDegrees(Math.abs(angleErrorRad));
-        double degreesIntoSlowZone = startDeg - distanceDeg;
-
-        double power = maxPower;
-        if (degreesIntoSlowZone > 0.0) {
-            power = maxPower - rate * degreesIntoSlowZone;
+        if (error > fineStart) {
+            double exponent = RobotConstants.Turret.SLOWDOWN_CURVE_EXPONENT;
+            if (!(exponent > 0.0)) {
+                exponent = 1.0;
+            }
+            double fraction = (error - fineStart) / (farStart - fineStart);
+            return finePower + (farPower - finePower) * Math.pow(fraction, exponent);
         }
-        return Math.signum(angleErrorRad) * Range.clip(power, minPower, maxPower);
+        if (error > tolerance) {
+            double fraction = (error - tolerance) / (fineStart - tolerance);
+            return minPower + (finePower - minPower) * fraction;
+        }
+        // Inside the enter tolerance but not aimed cannot happen in the control loop.
+        return minPower;
+    }
+
+    /** @return the smallest correcting power, never above MAX_POWER (low during first tests) */
+    private static double minimumPower() {
+        return Math.min(RobotConstants.Turret.MIN_COMMAND_POWER, RobotConstants.Turret.MAX_POWER);
+    }
+
+    /**
+     * Velocity feedforward with a rate limit, so a noisy speed estimate cannot jerk the
+     * turret. It may FALL at once (feedforward that lingers overshoots), but it builds up no
+     * faster than {@link RobotConstants.Turret#FEEDFORWARD_SLEW_PER_SECOND}, and after a
+     * reversal it builds up again from zero. None while the aim is held at a soft limit.
+     */
+    private double updateFeedforward(double targetVelocityRadSec, double dt) {
+        double wanted = 0.0;
+        if (RobotConstants.Turret.USE_FEEDFORWARD && targetMovingLatched && !targetClipped) {
+            wanted = kV * targetVelocityRadSec;
+        }
+        double slew = RobotConstants.Turret.FEEDFORWARD_SLEW_PER_SECOND;
+        if (slew > 0.0) {
+            double kept = (wanted * feedforwardPower > 0.0) ? feedforwardPower : 0.0;
+            if (Math.abs(wanted) > Math.abs(kept)) {
+                double step = slew * dt;
+                wanted = kept + Range.clip(wanted - kept, -step, step);
+            }
+        }
+        feedforwardPower = wanted;
+        return feedforwardPower;
+    }
+
+    /**
+     * @param errorSign direction of the angle error
+     * @return true if the target is really (filtered AND unfiltered speed) travelling
+     *         against the error, that is, toward the turret
+     */
+    private boolean isTargetApproaching(double errorSign) {
+        double velocitySign = Math.signum(targetAngularVelocityRadSec);
+        double movingEnter = Math.toRadians(RobotConstants.Turret.TARGET_MOVING_THRESHOLD_DEG_SEC);
+        return targetMovingLatched
+                && velocitySign != errorSign
+                && Math.signum(rawTargetVelocityRadSec) == velocitySign
+                && Math.abs(rawTargetVelocityRadSec) > 0.5 * movingEnter;
+    }
+
+    private static boolean isFinite(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
     }
 
     /**
@@ -773,6 +766,9 @@ public class TurretSubsystem {
      * counterclockwise); the runtime {@link #servoSign} correction is applied here.
      */
     private void setServoPower(double power) {
+        if (!isFinite(power)) {
+            power = 0.0; // a bad Panels value must never reach the servos
+        }
         lastCommandedPower = power;
         leftServo.setPower(power * servoSign);
         rightServo.setPower(power * servoSign);
@@ -926,7 +922,7 @@ public class TurretSubsystem {
         } else {
             servoSign = -servoSign;
             autoFlipCount++;
-            pidfController.reset();
+            feedforwardPower = 0.0;
         }
     }
 
@@ -1070,7 +1066,7 @@ public class TurretSubsystem {
 
     public void setMode(TurretMode mode) {
         if (this.mode != mode) {
-            pidfController.reset();
+            feedforwardPower = 0.0;
             firstTargetSample = true;
             onTarget = false;
             restartMonitor();
@@ -1132,10 +1128,17 @@ public class TurretSubsystem {
         return Math.hypot(targetXInches - turretWorldX, targetYInches - turretWorldY);
     }
 
-    /** Changes the extra controller terms at run time (the slow-down profile is in RobotConstants). */
+    /**
+     * Changes the feedforward gains at run time (the power profile is in RobotConstants).
+     *
+     * @param kI ignored: the hybrid controller has no integral term
+     * @param kD ignored: the hybrid controller has no derivative term
+     * @param kV velocity feedforward, power per rad/s of target motion
+     * @param kF breakaway power used to keep pace with a moving target while aimed
+     */
     public void setGains(double kI, double kD, double kV, double kF) {
         this.kV = kV;
-        this.pidfController.setGains(kI, kD, kF);
+        this.kF = kF;
     }
 
     public void setSoftLimitsDegrees(boolean useSoftLimits, double minDegrees, double maxDegrees) {
@@ -1156,9 +1159,9 @@ public class TurretSubsystem {
         }
     }
 
-    /** Stops both servos and resets PIDF state. The turret is no longer "on target". */
+    /** Stops both servos and resets the controller. The turret is no longer "on target". */
     public void stop() {
-        pidfController.reset();
+        feedforwardPower = 0.0;
         firstTargetSample = true;
         onTarget = false;
         targetMovingLatched = false;
@@ -1212,106 +1215,61 @@ public class TurretSubsystem {
     }
 
     /**
-     * @return one-line turret state for the Driver Station: the mode, or what is keeping
-     *         the servos stopped
+     * @return one-line turret state for the Driver Station: the mode and what it is aiming
+     *         at, or what is keeping the servos stopped
      */
     public String getStatusText() {
         if (!enabled || mode == TurretMode.DISABLED) {
             return "DISABLED (stopped)";
         }
         if (mode == TurretMode.MANUAL) {
-            return manualPower == 0.0
-                    ? "MANUAL (stopped; Dpad Left/Right moves it)"
-                    : String.format("MANUAL (jog power %.2f)", manualPower);
+            return "MANUAL";
         }
         if (encoderFault) {
             return "STOPPED BY FAULT (was " + mode + ")";
         }
-        return mode == TurretMode.HOME ? "HOME (fixed angle on the robot)" : "TRACKING (hive)";
+        if (mode == TurretMode.HOME) {
+            return String.format("HOME (fixed %.0f deg, not the hive)", Math.toDegrees(homeAngleRad));
+        }
+        if (autoSelectSide) {
+            return aimingAtTopSide ? "TRACKING HIVE TOP" : "TRACKING HIVE BOTTOM";
+        }
+        return "TRACKING FIXED POINT";
     }
 
     /**
-     * Adds the turret state, warnings and aiming diagnostics to the Driver Station. The
-     * caller still calls {@code telemetry.update()}. Put this FIRST on the screen: these
-     * are the lines that show why the turret is or is not aiming.
+     * Adds the turret state to the Driver Station, plus one short line for each thing that
+     * is wrong. The caller still calls {@code telemetry.update()}.
      *
+     * <p>How to fix each warning (after the match):
      * <ul>
-     *   <li>{@code Turret}: the mode, or what is keeping the servos stopped</li>
-     *   <li>{@code encoder}: the motor port the count is read through, and whether the
-     *       count has changed at all since Init</li>
-     *   <li>{@code aiming at}: HIVE TOP / HIVE BOTTOM, FIXED POINT for a manual target,
-     *       FIXED ANGLE in HOME mode, NOTHING when stopped</li>
-     *   <li>{@code targetGlobalDeg}: field angle from the turret to the target</li>
-     *   <li>{@code relativeTargetDeg}: that angle relative to the chassis (where the turret should point)</li>
-     *   <li>{@code measuredAngleDeg}: where the encoder says the turret points</li>
-     *   <li>{@code encoderTicks}: raw encoder count (use this to check ENCODER_REVERSED)</li>
-     *   <li>{@code angleErrorDeg}: relative target minus measured, shortest path</li>
-     *   <li>{@code aimed at target}: true only when TRACKING and aimed (see {@link #isAimedAtTarget()})</li>
-     *   <li>{@code lastCommandedPower}: power sent to both servos this loop</li>
+     *   <li>{@code DIRECTION KEEPS FLIPPING}: the measured angle does not follow the servos.
+     *       Check that the encoder gear is tight and that motor port
+     *       {@link RobotConstants.Turret#ENCODER_PORT} really carries the turret encoder.</li>
+     *   <li>{@code ENCODER NOT COUNTING}: the servos were driven and the count did not
+     *       change. Either the encoder cable is not in that port's encoder socket (fix
+     *       {@code ENCODER_PORT}; the init screen shows which port counts), or the turret
+     *       cannot turn (jammed, or raise
+     *       {@link RobotConstants.Turret#MIN_COMMAND_POWER}).</li>
+     *   <li>{@code SERVO DIRECTION AUTO-FLIPPED} or {@code JOG DIRECTION WRONG}: the servo
+     *       and encoder directions disagree. On the init screen turn the turret LEFT by
+     *       hand. Angle goes UP: the encoder is right, so flip BOTH {@code SERVO_*_REVERSED}.
+     *       Angle goes DOWN: flip {@code ENCODER_REVERSED} and leave the servo flags.</li>
      * </ul>
      */
     public void addTelemetry(Telemetry telemetry) {
         telemetry.addData("Turret", getStatusText());
-        if (encoderFault && directionFault) {
-            telemetry.addLine(String.format(
-                    "!! TURRET STOPPED: DIRECTION KEEPS FLIPPING (%d flips). The measured angle does"
-                            + " not follow the servos. Check that the encoder gear is tight and that"
-                            + " motor port '%s' really carries the TURRET encoder. Dpad Left/Right"
-                            + " still jogs. G2 Dpad Down or Up retries.",
-                    autoFlipCount, RobotConstants.Turret.ENCODER_PORT));
-        } else if (encoderFault) {
-            telemetry.addLine(String.format(
-                    "!! TURRET STOPPED: ENCODER NOT COUNTING. The servos were driven and the count"
-                            + " read through motor port '%s' did not change. Either the turret"
-                            + " encoder cable is not in THAT port's encoder socket (fix"
-                            + " Turret.ENCODER_PORT; the init screen shows which port counts) or"
-                            + " the turret cannot turn (jammed, or the minimum power is too weak:"
-                            + " raise Turret.MIN_COMMAND_POWER). Dpad Left/Right still jogs. G2 Dpad"
-                            + " Down or Up retries.",
-                    RobotConstants.Turret.ENCODER_PORT));
+        if (encoderFault) {
+            telemetry.addLine(directionFault
+                    ? "!! TURRET STOPPED: DIRECTION KEEPS FLIPPING (G2 Dpad Down or Up retries)"
+                    : "!! TURRET STOPPED: ENCODER NOT COUNTING (G2 Dpad Down or Up retries)");
         }
         if (autoFlipCount > 0) {
-            telemetry.addLine(String.format(
-                    "!! SERVO DIRECTION AUTO-FLIPPED (%d x, now %s). Servo and encoder directions"
-                            + " disagree. Find the wrong flag on the INIT screen: turn the turret"
-                            + " LEFT by hand. Angle goes UP = encoder is right, so set BOTH"
-                            + " SERVO_*_REVERSED to %b. Angle goes DOWN = set ENCODER_REVERSED to %b"
-                            + " and leave the servo flags.",
-                    autoFlipCount, servoSign < 0 ? "reversed" : "as configured",
-                    !RobotConstants.Turret.SERVO_LEFT_REVERSED,
-                    !RobotConstants.Turret.ENCODER_REVERSED));
+            telemetry.addLine("!! SERVO DIRECTION AUTO-FLIPPED");
         }
         if (jogDirectionMismatch) {
-            telemetry.addLine("!! JOG DIRECTION: a Dpad jog moved measuredAngleDeg the WRONG way"
-                    + " (Left must make it go UP). Servo and encoder directions disagree; see"
-                    + " ENCODER_REVERSED and SERVO_*_REVERSED in RobotConstants.");
+            telemetry.addLine("!! JOG DIRECTION WRONG");
         }
-        telemetry.addData("Turret encoder", "port '%s', %s",
-                RobotConstants.Turret.ENCODER_PORT,
-                encoderSeenMoving ? "counting" : "count has NOT changed since Init");
-
-        String aimingAt;
-        if (!enabled || mode == TurretMode.DISABLED) {
-            aimingAt = "NOTHING (stopped)";
-        } else if (mode == TurretMode.MANUAL) {
-            aimingAt = "NOTHING (manual)";
-        } else if (encoderFault) {
-            aimingAt = "NOTHING (stopped by fault)";
-        } else if (mode == TurretMode.HOME) {
-            aimingAt = String.format("FIXED ANGLE %.0f deg (not the hive)", Math.toDegrees(homeAngleRad));
-        } else if (autoSelectSide) {
-            aimingAt = aimingAtTopSide ? "HIVE TOP" : "HIVE BOTTOM";
-        } else {
-            aimingAt = "FIXED POINT";
-        }
-        telemetry.addData("Turret aiming at", aimingAt);
-        telemetry.addData("Turret measuredAngleDeg", "%.1f", getCurrentAngleDegrees());
-        telemetry.addData("Turret relativeTargetDeg", "%.1f", getTargetAngleDegrees());
-        telemetry.addData("Turret angleErrorDeg", "%.2f (onTarget=%b)", getAngleErrorDegrees(), isOnTarget());
-        telemetry.addData("Turret lastCommandedPower", "%.2f", lastCommandedPower);
-        telemetry.addData("Turret encoderTicks", lastEncoderTicks);
-        telemetry.addData("Turret targetGlobalDeg", "%.1f", getTargetGlobalDegrees());
-        telemetry.addData("Turret aimed at target", isAimedAtTarget());
     }
 
     /**

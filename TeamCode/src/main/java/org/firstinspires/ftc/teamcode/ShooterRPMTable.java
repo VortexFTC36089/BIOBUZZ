@@ -3,10 +3,7 @@ package org.firstinspires.ftc.teamcode;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.math.Pose;
 
-import org.firstinspires.ftc.robotcore.external.Telemetry;
-
 import java.util.Arrays;
-import java.util.Locale;
 
 /**
  * Picks the flywheel RPM and Kp from the robot's distance to the hive.
@@ -44,7 +41,8 @@ import java.util.Locale;
  *    <li>Drive to a spot and change {@code TUNING_KP} and {@code TUNING_RPM} until the balls
  *        go in. Kp can shift the real wheel speed a little, so after changing it, check the
  *        RPM again.</li>
- *    <li>Put the X and Y shown on the Driver Station, that RPM and that Kp into a point.</li>
+ *    <li>Put the X and Y shown on the Driver Station (only while {@code TUNING_MODE} is true),
+ *        that RPM and that Kp into a point.</li>
  *    <li>Set {@code TUNING_MODE} back to false.</li>
  * </ol>
  *
@@ -290,35 +288,6 @@ public final class ShooterRPMTable {
         }
         // Only a usable gain may reach the controller (NaN fails this comparison too).
         return kp > 0.0 && !Double.isInfinite(kp) ? kp : 0.0;
-    }
-
-    /** Distance, RPM, Kp and equations for the Driver Station. */
-    public static void addTelemetry(Telemetry telemetry, Pose pose) {
-        String source = !ENABLED ? "fixed TARGET_RPM"
-                : TUNING_MODE ? "TUNING_RPM" : "from equation";
-        telemetry.addData("Hive distance (in)", "%.1f", distanceToHive(pose.x(), pose.y()));
-        telemetry.addData("Shooter RPM", "%.0f (%s)", rpmFor(pose), source);
-
-        double kp = kpFor(pose);
-        if (kp > 0.0) {
-            telemetry.addData("Shooter Kp", "%.5f (%s)", kp,
-                    TUNING_MODE ? "TUNING_KP" : "from equation");
-        } else {
-            telemetry.addData("Shooter Kp", "controller config, L %.5f / R %.5f",
-                    OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM,
-                    OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM);
-        }
-
-        telemetry.addData("RPM equation", describe(rpmEquation(), "%.4f*d^2 %+.3f*d %+.1f"));
-        telemetry.addData("Kp equation", describe(kpEquation(), "%.8f*d^2 %+.6f*d %+.5f"));
-    }
-
-    private static String describe(Equation e, String format) {
-        if (e.pointCount == 0) {
-            return "no tuned points";
-        }
-        return String.format(Locale.US, format + "  (%d points, d = %.0f to %.0f in)",
-                e.a, e.b, e.c, e.pointCount, e.nearestInches, e.farthestInches);
     }
 
     private static double clip(double value, double minimum, double maximum) {

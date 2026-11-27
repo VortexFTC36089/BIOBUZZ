@@ -100,8 +100,6 @@ public class MainTeleOp extends OpMode {
     private Command activeShoot;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
-    private long lastLoopNanos;
-
     /** Pose the follower was told it starts at, and where that pose came from. */
     private Pose startPose;
     private String startPoseSource = "";
@@ -303,7 +301,6 @@ public class MainTeleOp extends OpMode {
                     + " If it goes DOWN, flip Turret.ENCODER_REVERSED.");
             telemetry.addLine("  Check 2: turn the TURRET ONE FULL TURN by hand, angle must read 360."
                     + " If not, set Turret.ENCODER_TO_TURRET_RATIO to 8192 / (ticks since zero).");
-            telemetry.addLine("  Check 3: turn the ROBOT LEFT by hand, Heading (deg) after Play must go UP.");
             telemetry.addLine("  The turret starts moving by itself when you press Play. Hands clear.");
         } else {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
@@ -322,7 +319,7 @@ public class MainTeleOp extends OpMode {
             telemetry.addLine("G2: Dpad Down = TRACK the hive");
             telemetry.addLine("G2: Dpad Up = turret faces STRAIGHT AHEAD on the robot");
             telemetry.addLine("G2: Dpad Left/Right HOLD = move turret left/right by hand, stops where released"
-                    + " (Dpad LEFT must turn it LEFT and make the angle go UP)");
+                    + " (Dpad LEFT must turn it LEFT)");
         }
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
                 ? "NOT CONNECTED (press Start+B on it)" : "connected");
@@ -330,8 +327,7 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Resets the loop timer when the driver presses Play so the time spent
-     * sitting in init does not show up on the first loop.
+     * Clears the saved autonomous results when the driver presses Play.
      *
      * <p>The turret is NOT re-zeroed here. Its zero came from the autonomous
      * that just ran, or was taken at Init. The encoder has been counting ever
@@ -339,7 +335,6 @@ public class MainTeleOp extends OpMode {
      */
     @Override
     public void start() {
-        lastLoopNanos = System.nanoTime();
         // The autonomous pose has now been used. Clear it so a later practice
         // TeleOp does not silently start from an old autonomous end pose.
         blackboard.remove(RobotBlackboard.LAST_AUTO_POSE);
@@ -758,61 +753,70 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * One telemetry.update() per loop, as required by the Driver Station.
+     * The match screen: only what changes what a driver does next. Warnings and
+     * automation lines appear only while they apply. One telemetry.update() per loop,
+     * as required by the Driver Station.
      *
      * @param slowMode whether the slow-mode bumper is held this loop
      */
     private void writeTelemetry(boolean slowMode) {
-        long now = System.nanoTime();
-        double loopMs = (now - lastLoopNanos) / 1_000_000.0;
-        lastLoopNanos = now;
-
-        Pose pose = follower.pose();
-        // Turret first: its state, warnings and angles must be visible without
-        // scrolling the Driver Station, because they show why it is or is not aiming.
+        // Most urgent first, so it is visible without scrolling the Driver Station.
+        telemetry.addData("SHOOT", shootStatus());
+        if (gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED) {
+            telemetry.addLine("!! Gamepad 2 NOT CONNECTED (press Start+B on it)");
+        }
         if (turret != null) {
             turret.addTelemetry(telemetry);
-            telemetry.addData("Turret target (in)", "(%.1f, %.1f), %.1f in away",
-                    turret.getTargetX(), turret.getTargetY(), turret.getDistanceToTarget(pose));
         } else {
             telemetry.addData("Turret", "DISABLED (TURRET_ENABLED = false)");
         }
+        telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f)",
+                outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm());
+        if (!outtake.getControllerFault().isEmpty()) {
+            telemetry.addData("Outtake controller fault", outtake.getControllerFault());
+        }
+        double driveSpeed = slowMode ? RobotConstants.Drive.SLOW_MODE_MULTIPLIER : speedMultiplier;
+        telemetry.addData("Drive speed", "%.0f%%%s", driveSpeed * 100.0, slowMode ? " (SLOW)" : "");
         if (aligning) {
             telemetry.addData("Chassis align", "%s hive, error %.1f deg%s",
                     chassisAligner.isAimingAtTopSide() ? "TOP" : "BOTTOM",
                     chassisAligner.getErrorDegrees(),
                     chassisAligner.isAligned() ? " (ALIGNED)" : "");
-        } else {
-            telemetry.addData("Chassis align", "OFF (G1 Y)");
         }
-        telemetry.addData("X (in)", pose.x());
-        telemetry.addData("Y (in)", pose.y());
-        telemetry.addData("Heading (deg)", Math.toDegrees(pose.heading()));
-        telemetry.addData("Start pose was", startPoseSource);
-        telemetry.addData("Drive mode", fieldCentric ? "FIELD" : "ROBOT");
-        telemetry.addData("Drive speed", "%.0f%%", speedMultiplier * 100.0);
-        telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
-        telemetry.addData("Intake", intake.getState());
-        telemetry.addData("Transfer", intake.getTransferState());
-        ShooterRPMTable.addTelemetry(telemetry, pose);
-        telemetry.addData("Outtake Motor", outtake.getMotorState());
-        telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
-                outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
-        telemetry.addData("Outtake Vbat / command (L/R)", "%.2f V / %.2f V, %.2f V",
-                outtake.getBatteryVoltage(), outtake.getLeftVoltageCommand(),
-                outtake.getRightVoltageCommand());
-        if (!outtake.getControllerFault().isEmpty()) {
-            telemetry.addData("Outtake controller fault", outtake.getControllerFault());
+        if (drivingToHome) {
+            telemetry.addData("Drive to pose", "FOLLOWING");
         }
-        telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
-        telemetry.addData("Shoot balls", isShootActive() ? "RUNNING" : "OFF");
-        telemetry.addData("Servo", servo == null
-                ? "DISABLED"
-                : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
-        telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
-                ? "NOT CONNECTED (press Start+B on it)" : "connected");
-        telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
-        telemetry.addData("Loop (ms)", loopMs);
+        // Not a match line: ShooterRPMTable tuning needs the spot's X and Y.
+        if (ShooterRPMTable.TUNING_MODE) {
+            Pose pose = follower.pose();
+            telemetry.addData("Tuning spot X / Y (in)", "%.1f / %.1f", pose.x(), pose.y());
+        }
         telemetry.update();
+    }
+
+    /**
+     * @return whether to pull the shoot trigger. READY needs the flywheels at speed and the
+     *         shot aimed, by the tracking turret or by chassis align. When neither is
+     *         aiming, only the flywheels can be checked.
+     */
+    private String shootStatus() {
+        if (!outtake.atSpeed()) {
+            return "WAIT (flywheels)";
+        }
+        boolean turretAims = turret != null
+                && turret.getMode() == TurretSubsystem.TurretMode.TRACKING;
+        // Chassis align only aims the shot while the turret is not pointing somewhere else.
+        boolean chassisAims = aligning && (turret == null || turretHeldByAlign);
+        if (!turretAims && !chassisAims) {
+            return "AIM BY HAND (flywheels ready)";
+        }
+        if (turret != null && turret.hasEncoderFault()) {
+            return "AIM BY HAND (turret fault)";
+        }
+        if (turretAims) {
+            return turret.isAimedAtTarget() ? "READY" : "WAIT (turret aiming)";
+        }
+        boolean aligned = chassisAligner.isAligned() && (turret == null || turret.isOnTarget());
+        return aligned ? "READY" : "WAIT (chassis aligning)";
     }
 }

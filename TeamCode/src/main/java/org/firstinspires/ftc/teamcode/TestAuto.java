@@ -329,15 +329,13 @@ public class TestAuto extends LinearOpMode {
             outtake.update();
 
             turret.addTelemetry(telemetry);
-            telemetry.addData("x", follower.pose().x());
-            telemetry.addData("y", follower.pose().y());
-            telemetry.addData("heading", follower.pose().heading());
             telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (atSpeed=%b)",
                     outtake.getLeftRpm(), outtake.getRightRpm(), outtake.atSpeed());
-            telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
+            if (!outtake.getControllerFault().isEmpty()) {
+                telemetry.addData("Outtake controller fault", outtake.getControllerFault());
+            }
 
             if (follower.currentPath() != null) {
-                telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());
                 telemetry.addData("Path number", follower.pathIndex());
             }
 

@@ -353,15 +353,16 @@ public final class RobotConstants {
         // guess and still has to be checked by hand on the init screen. If the servo and
         // encoder directions disagree the turret cannot run away: TurretSubsystem notices
         // the encoder moving against the commanded power, flips the servo direction at run
-        // time and shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station with the
-        // steps to find out which flag is the wrong one.
+        // time and shows "SERVO DIRECTION AUTO-FLIPPED" on the Driver Station. The steps
+        // to find the wrong flag are on TurretSubsystem.addTelemetry.
         public static boolean SERVO_LEFT_REVERSED = true;
         public static boolean SERVO_RIGHT_REVERSED = true;
 
         /**
          * Servo power used while the operator jogs the turret by hand with Gamepad 2
          * Dpad Left / Right. Also the quickest direction check: Dpad LEFT must turn the
-         * turret LEFT (counterclockwise from above) and make measuredAngleDeg go UP.
+         * turret LEFT (counterclockwise from above); "JOG DIRECTION WRONG" shows if the
+         * encoder disagrees.
          */
         public static double JOG_POWER = 0.34;
 
@@ -439,6 +440,13 @@ public final class RobotConstants {
          * still counts as not counting.
          */
         public static int ENCODER_STALL_MIN_TICKS = 30;
+
+        /**
+         * Bad-reading filter. If the angle changes between two loops by more than the turret
+         * could turn at full speed in that time PLUS this many degrees, that one reading is
+         * ignored. A second such reading in a row is believed. 0 turns the filter off.
+         */
+        public static double ENCODER_MAX_JUMP_DEGREES = 45.0;
 
         /**
          * No-load speed of ONE turret servo at full power, in RPM, from its spec sheet.
@@ -555,98 +563,76 @@ public final class RobotConstants {
         public static double MAX_ANGLE_DEGREES = 180.0;
 
         /**
-         * Servo power cap in [0, 1], and the power used for the fast part of every move
-         * (anything farther from the target than {@link #SLOWDOWN_START_DEGREES}).
-         * Start low (0.3 to 0.5) for first tests.
-         *
-         * <p>The slow-down ramp counts DOWN from this power, so changing MAX_POWER shifts
-         * the power at every distance inside the slow zone by the same amount. Re-tune
-         * {@link #SLOWDOWN_START_DEGREES} and {@link #SLOWDOWN_POWER_PER_DEGREE} every time
-         * this changes. At a low MAX_POWER the values tuned for 0.9 make the turret crawl
-         * at minimum power for a long way (at 0.4 with 0.018 per degree, a
-         * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
+         * Hard cap in [0, 1] on every turret power, including the jog. None of the power
+         * values below can exceed it. Start low (0.3 to 0.5) for first tests.
          */
-        // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
+        // TODO(team): raise in steps of 0.1 once the turret behaves
         public static double MAX_POWER = 1;
 
         /**
-         * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
-         * STARTS slowing down.
+         * HYBRID CONTROLLER: how far from the target (degrees) the turret counts as FAR.
+         * The power depends only on the size of the angle error:
          *
-         * <p>Farther from the target than this, the turret runs flat out at
-         * {@link #MAX_POWER}. Once it is closer than this, the power is reduced by
-         * {@link #SLOWDOWN_POWER_PER_DEGREE} for every degree it gets closer, but never
-         * below {@link #MIN_COMMAND_POWER}. Inside {@link #ANGLE_TOLERANCE_DEGREES} it stops.
+         * <pre>
+         * error                                    power
+         * beyond FAR_ERROR_DEGREES                 FAR_POWER
+         * FINE_ERROR to FAR_ERROR  (slowing down)  FAR_POWER down to FINE_POWER, along a curve
+         * tolerance to FINE_ERROR  (fine)          FINE_POWER down to MIN_COMMAND_POWER
+         * inside the tolerance                     0 (see USE_FEEDFORWARD for a moving target)
+         * </pre>
          *
-         * <p>Tuning: if the turret OVERSHOOTS the target and comes back, make this BIGGER so
-         * it starts braking earlier. If it slows down too early and wastes time, make it
-         * smaller.
-         *
-         * <p>The two knobs are linked. The power only gets down to the minimum before the
-         * target if {@code SLOWDOWN_START_DEGREES * SLOWDOWN_POWER_PER_DEGREE} is at least
-         * {@code MAX_POWER - MIN_COMMAND_POWER} (0.75 with the values here; 45 x 0.018 is
-         * 0.81). A turret that arrives above the minimum power does not stop: it swings
-         * back and forth across the target. So when this is made smaller the code makes
-         * the slow-down steeper by itself to keep that from happening (see
-         * {@link #SLOWDOWN_POWER_PER_DEGREE}); a very small zone therefore means very
-         * hard braking, and a heavy turret will still overshoot it.
+         * <p>Tune in this order: MIN_COMMAND_POWER, then FINE_*, then FAR_*. If the turret
+         * OVERSHOOTS after a big move, raise this value so it starts braking earlier. If it
+         * wastes time slowing down, lower it.
          */
         // TODO(team): tune on the robot
-        public static double SLOWDOWN_START_DEGREES = 70.0;
+        public static double FAR_ERROR_DEGREES = 70.0;
+
+        /** Power while FAR from the target (capped at {@link #MAX_POWER}). */
+        // TODO(team): tune on the robot
+        public static double FAR_POWER = 1.0;
 
         /**
-         * TURNING SPEED PROFILE, knob 2 of 2: how quickly the turret slows down once it is
-         * inside {@link #SLOWDOWN_START_DEGREES}, as servo power removed per degree closer
-         * to the target.
-         *
-         * <p>Power at a given distance inside the zone is
-         * {@code MAX_POWER - SLOWDOWN_POWER_PER_DEGREE * (SLOWDOWN_START_DEGREES - distance)},
-         * held at {@link #MIN_COMMAND_POWER} once it gets that low. With the values here
-         * (0.9 max, 45 degrees, 0.018 per degree, 0.15 min) the power is 0.9 at 45 degrees,
-         * 0.45 at 20 degrees, 0.27 at 10 degrees, and reaches the 0.15 minimum at about
-         * 3.3 degrees, then creeps the rest of the way.
-         *
-         * <p>Tuning: a BIGGER number brakes harder, so the turret reaches the slow creep
-         * sooner and travels the last part slowly (safe, but slower). A SMALLER number
-         * brakes more gently and saves time.
-         *
-         * <p>There is a lowest value that can work:
-         * {@code (MAX_POWER - MIN_COMMAND_POWER) / SLOWDOWN_START_DEGREES} (0.0167 with the
-         * values here). That value reaches the minimum power exactly at the target. Below
-         * it the turret would still be driving hard when it arrives and would swing back
-         * and forth across the target without stopping, so the code never uses less than
-         * that: a number smaller than the limit (or 0) simply behaves like the limit.
-         * Staying about 10 percent above it, as 0.018 does, leaves a short creep at the end.
+         * Error (degrees) inside which the fine adjustment starts. If the turret hunts back
+         * and forth around the target, raise this or lower {@link #FINE_POWER}.
          */
         // TODO(team): tune on the robot
-        public static double SLOWDOWN_POWER_PER_DEGREE = 0.012;
+        public static double FINE_ERROR_DEGREES = 10.0;
+
+        /** Power at {@link #FINE_ERROR_DEGREES}, where slowing down hands over to fine. */
+        // TODO(team): tune on the robot
+        public static double FINE_POWER = 0.25;
 
         /**
-         * Extra controller terms on top of the turning speed profile above. The profile
-         * decides the power from the distance to the target; these add to it.
-         *
-         * <p>KI and KD are off (0). Add a little KD only if the turret still overshoots
-         * after the two slow-down knobs are tuned. If the turret stops short of the target,
-         * measure {@link #SERVO_DEADBAND_POWER} first (it is set too low); KI would also
-         * fix it, but KI builds up during every long move and makes the turret overshoot more.
-         *
-         * <p>KF is the breakaway power: the power needed just to start the turret moving.
-         * It is used when the turret is already aimed and only has to keep pace with a
-         * moving target.
-         *
-         * <p>KV is the velocity feedforward (power per rad/s of target motion), sized so
-         * full turret speed takes about full servo power. It lets the turret keep pace
-         * with the target while the chassis spins instead of trailing behind it. Set to
-         * 0 to turn it off.
+         * Shape of the slow-down between FAR_ERROR_DEGREES and FINE_ERROR_DEGREES.
+         * 1 is a straight line. Above 1 (for example 1.5) drops the power sooner, which
+         * overshoots less. Below 1 (for example 0.7) stays fast longer and brakes later.
+         */
+        public static double SLOWDOWN_CURVE_EXPONENT = 1.0;
+
+        /**
+         * Velocity feedforward: while the target is moving (the chassis turning or driving
+         * past the hive), add power in proportion to how fast the target angle changes, so
+         * the turret keeps up instead of trailing. False turns off both {@link #KV} and
+         * {@link #KF}.
+         */
+        public static boolean USE_FEEDFORWARD = true;
+
+        /**
+         * KV is the velocity feedforward (power per rad/s of target motion), sized so full
+         * turret speed takes about full servo power. KF is the breakaway power, added when
+         * the turret is already aimed and only has to keep pace with a moving target.
          */
         // TODO(team): tune on the robot
-        public static double KI = 0.0;
-        public static double KD = 0.0;
         public static double KV = (1.0 - SERVO_DEADBAND_POWER) / RAD_PER_SEC_AT_FULL_POWER;
         public static double KF = SERVO_DEADBAND_POWER;
 
-        /** Maximum integral accumulation (radians * seconds). */
-        public static double MAX_INTEGRAL = 0.5;
+        /**
+         * Fastest the velocity feedforward may build up, in servo power per second, so a
+         * noisy speed estimate cannot jerk the turret. Lower is smoother but lags more.
+         * 0 removes the limit.
+         */
+        public static double FEEDFORWARD_SLEW_PER_SECOND = 5.0;
 
         /** Angle error deadband (degrees) within which the turret counts as aimed. */
         public static double ANGLE_TOLERANCE_DEGREES = .75;
