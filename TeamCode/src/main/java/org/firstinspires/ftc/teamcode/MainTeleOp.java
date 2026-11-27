@@ -75,6 +75,13 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton servoToggle = new ToggleButton();
     private final ToggleButton turretHiveToggle = new ToggleButton();
     private final ToggleButton turretForwardToggle = new ToggleButton();
+    private final ToggleButton alignToggle = new ToggleButton();
+    /** Turns the chassis toward the hive while {@link #aligning} (Gamepad 1 Y). */
+    private final ChassisAligner chassisAligner = new ChassisAligner();
+    private boolean aligning;
+    /** True while chassis align is holding the turret straight and must give it back. */
+    private boolean turretHeldByAlign;
+    private TurretSubsystem.TurretMode turretModeBeforeAlign;
     /** True while Gamepad 2 Dpad Left/Right was jogging the turret on the last loop. */
     private boolean turretJogging;
     /**
@@ -169,6 +176,8 @@ public class MainTeleOp extends OpMode {
         }
 
         drivingToHome = false;
+        aligning = false;
+        turretHeldByAlign = false;
         speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
 
         writeInitTelemetry();
@@ -301,8 +310,9 @@ public class MainTeleOp extends OpMode {
         }
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric)");
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  LB hold = slow");
-        telemetry.addLine("G1: X = drive to start pose  |  B = drive to opposite pose  |  any stick cancels"
+        telemetry.addLine("G1: X = drive to bottom shooting spot  |  B = drive to opposite pose  |  any stick cancels"
                 + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
+        telemetry.addLine("G1: Y = align chassis to the hive on/off  |  turn stick cancels");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
         telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (waits for the turret to aim)");
@@ -372,6 +382,20 @@ public class MainTeleOp extends OpMode {
             drivingToHome = false;
         }
 
+        // ---- Chassis align to the hive (Gamepad 1 Y toggles) ----
+        // The left stick still drives while aligning; the turn stick hands control back.
+        // Checked here, before speed scaling, like the cancel above.
+        if (alignToggle.update(gamepad1.y)) {
+            if (aligning) {
+                stopAlign();
+            } else {
+                startAlign();
+            }
+        } else if (aligning
+                && Math.abs(turn) > RobotConstants.Drive.AUTOMATION_CANCEL_DEADZONE) {
+            stopAlign();
+        }
+
         boolean slowMode = gamepad1.left_bumper;
         double activeSpeed = slowMode ? RobotConstants.Drive.SLOW_MODE_MULTIPLIER : speedMultiplier;
         forward *= activeSpeed;
@@ -387,13 +411,15 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Optional drive-to-pose (each button needs its OWN edge detector) ----
-        // Gamepad 1 X: drive to the start pose.
+        // Gamepad 1 X: drive to the bottom shooting spot.
         if (homeToggle.update(gamepad1.x)) {
-            startDriveToStart();
+            stopAlign();
+            startDriveToBottomShoot();
         }
 
         // Gamepad 1 B: drive to the opposite start pose.
         if (opposeToggle.update(gamepad1.b)) {
+            stopAlign();
             startDriveToOppose();
         }
 
@@ -404,6 +430,10 @@ public class MainTeleOp extends OpMode {
                 follower.manual(0.0, 0.0, 0.0);
             }
         } else {
+            if (aligning) {
+                // Not scaled by slow mode: a scaled-down turn could be too weak to move.
+                turn = chassisAligner.turnPower(follower.pose());
+            }
             commandManualDrive(forward, strafe, turn);
         }
 
@@ -485,14 +515,14 @@ public class MainTeleOp extends OpMode {
 
     /**
      * Starts a straight line from the robot's current pose to
-     * {@link RobotConstants.Field#START_POSE}.
+     * {@link RobotConstants.Field#BOTTOM_SHOOT}.
      *
      * <p>If the robot is already there, a zero-length line path cannot be
      * constructed, so it simply holds that pose instead.
      */
-    private void startDriveToStart() {
+    private void startDriveToBottomShoot() {
         Pose current = follower.pose();
-        Pose home = RobotConstants.Field.START_POSE;
+        Pose home = RobotConstants.Field.BOTTOM_SHOOT;
 
         if (current.distance(home) < 0.5) {
             follower.hold(home);
@@ -523,6 +553,48 @@ public class MainTeleOp extends OpMode {
         Path homePath = line(current, home).linear(current, home);
         follower.follow(homePath);
         drivingToHome = true;
+    }
+
+    /**
+     * Gamepad 1 Y: starts turning the chassis toward the hive side on the robot's half of
+     * the field. Ends any drive-to-pose. With
+     * {@link RobotConstants.ChassisAlign#HOLD_TURRET_STRAIGHT} the turret is also held
+     * straight ahead until {@link #stopAlign()}.
+     */
+    private void startAlign() {
+        aligning = true;
+        drivingToHome = false;
+        boolean top = follower.pose().y() >= RobotConstants.Turret.SIDE_SWITCH_Y_INCHES;
+        if (turret != null) {
+            if (RobotConstants.ChassisAlign.HOLD_TURRET_STRAIGHT) {
+                turretModeBeforeAlign = turret.getMode();
+                turretHeldByAlign = true;
+                // A jog released just now must not switch the turret back to MANUAL.
+                turretJogging = false;
+                turret.setHomeAngle(0.0);
+                turret.setMode(TurretSubsystem.TurretMode.HOME);
+            } else if (turret.getMode() == TurretSubsystem.TurretMode.TRACKING) {
+                // Both are aiming, so pick the same side, also near the switch line.
+                top = turret.isAimingAtTopSide();
+            }
+        }
+        chassisAligner.start(top);
+    }
+
+    /**
+     * Gives turning back to the driver, and returns the turret to what it was doing unless
+     * the operator has taken it over since. Does nothing if not aligning.
+     */
+    private void stopAlign() {
+        if (!aligning) {
+            return;
+        }
+        aligning = false;
+        if (turretHeldByAlign) {
+            turretHeldByAlign = false;
+            turret.setHomeAngle(Math.toRadians(RobotConstants.Turret.HOME_ANGLE_DEGREES));
+            turret.setMode(turretModeBeforeAlign);
+        }
     }
 
     /**
@@ -654,6 +726,12 @@ public class MainTeleOp extends OpMode {
         boolean forwardPressed = turretForwardToggle.update(gamepad2.dpad_up);
         boolean hivePressed = turretHiveToggle.update(gamepad2.dpad_down);
 
+        // The operator's turret buttons win over chassis align: from now on it must not
+        // hand the turret back to its old mode.
+        if (gamepad2.dpad_up || gamepad2.dpad_down || gamepad2.dpad_left || gamepad2.dpad_right) {
+            turretHeldByAlign = false;
+        }
+
         // Manual move: held buttons, not edges. Left = +power (counterclockwise).
         boolean jogLeft = gamepad2.dpad_left;
         boolean jogRight = gamepad2.dpad_right;
@@ -698,6 +776,14 @@ public class MainTeleOp extends OpMode {
                     turret.getTargetX(), turret.getTargetY(), turret.getDistanceToTarget(pose));
         } else {
             telemetry.addData("Turret", "DISABLED (TURRET_ENABLED = false)");
+        }
+        if (aligning) {
+            telemetry.addData("Chassis align", "%s hive, error %.1f deg%s",
+                    chassisAligner.isAimingAtTopSide() ? "TOP" : "BOTTOM",
+                    chassisAligner.getErrorDegrees(),
+                    chassisAligner.isAligned() ? " (ALIGNED)" : "");
+        } else {
+            telemetry.addData("Chassis align", "OFF (G1 Y)");
         }
         telemetry.addData("X (in)", pose.x());
         telemetry.addData("Y (in)", pose.y());

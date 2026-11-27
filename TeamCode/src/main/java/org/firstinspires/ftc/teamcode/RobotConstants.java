@@ -363,7 +363,7 @@ public final class RobotConstants {
          * Dpad Left / Right. Also the quickest direction check: Dpad LEFT must turn the
          * turret LEFT (counterclockwise from above) and make measuredAngleDeg go UP.
          */
-        public static double JOG_POWER = 0.35;
+        public static double JOG_POWER = 0.34;
 
         /**
          * Direction monitor: a commanded power at or above this (either sign) is expected
@@ -481,7 +481,7 @@ public final class RobotConstants {
          * and a turret that is ahead of a target coming toward it just waits. Raising this
          * makes the turret step in bigger jumps and it can start to hunt back and forth.
          */
-        public static double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.07;
+        public static double MIN_COMMAND_POWER = SERVO_DEADBAND_POWER + 0.04;
 
         /**
          * Time constant (seconds) of the low-pass filter on the target's angular velocity,
@@ -522,9 +522,9 @@ public final class RobotConstants {
          * center-origin -72 to 72 frame). Every turret target must be given in this frame.
          */
         // TODO(team): replace these placeholders with the real hive coordinates (read them in the Pedro visualizer)
-        public static double TOP_TARGET_X_INCHES = 58;
-        public static double TOP_TARGET_Y_INCHES = 94.0;
-        public static double BOTTOM_TARGET_X_INCHES = 58;
+        public static double TOP_TARGET_X_INCHES = 60;
+        public static double TOP_TARGET_Y_INCHES = 94;
+        public static double BOTTOM_TARGET_X_INCHES = 52;
         public static double BOTTOM_TARGET_Y_INCHES = 53;
 
         /** Y position (inches) where the aimed side switches; 72 is the middle of a 144-inch field. */
@@ -567,7 +567,7 @@ public final class RobotConstants {
          * SLOWDOWN_START_DEGREES of about 17 instead of 45 removes the crawl).
          */
         // TODO(team): raise in steps of 0.1 once the turret behaves, re-tuning the slow-down each time
-        public static double MAX_POWER = 0.9;
+        public static double MAX_POWER = 1;
 
         /**
          * TURNING SPEED PROFILE, knob 1 of 2: how far from the target (degrees) the turret
@@ -649,7 +649,7 @@ public final class RobotConstants {
         public static double MAX_INTEGRAL = 0.5;
 
         /** Angle error deadband (degrees) within which the turret counts as aimed. */
-        public static double ANGLE_TOLERANCE_DEGREES = 1.5;
+        public static double ANGLE_TOLERANCE_DEGREES = .75;
 
         /**
          * Degrees. Once aimed on a stationary target, the turret stays still until the error
@@ -657,7 +657,41 @@ public final class RobotConstants {
          * ONE correction kick: the degrees the turret moves in one loop at MIN_COMMAND_POWER,
          * plus about 1 degree.
          */
-        public static double ANGLE_EXIT_TOLERANCE_DEGREES = 3.0;
+        public static double ANGLE_EXIT_TOLERANCE_DEGREES = 1.5;
+    }
+
+    /**
+     * Gamepad 1 Y in Main TeleOp: the chassis turns to face the hive (see
+     * {@link ChassisAligner}). It uses the hive coordinates, side switch and pivot offset in
+     * {@link Turret}.
+     *
+     * <p>Tunable from Panels (RobotConstants > ChassisAlign). Panels edits are NOT saved
+     * to this file and are lost when the Robot Controller app restarts: when a value is
+     * right, copy it here.
+     */
+    @Configurable
+    public static final class ChassisAlign {
+        /**
+         * True holds the turret straight ahead while aligning, so the chassis does all the
+         * aiming. False leaves the turret doing whatever it was doing.
+         */
+        public static boolean HOLD_TURRET_STRAIGHT = true;
+
+        // TODO(team): tune the values below on the robot
+        /** Turn power per radian of heading error. Raise if slow, lower if it overshoots. */
+        public static double KP = 1.6;
+        /** Turn power per radian/second of error change. Damps overshoot. */
+        public static double KD = 0.12;
+        /** Turn power added toward the target to overcome friction. Raise if it stops short. */
+        public static double KS = 0.08;
+        /** Largest turn power used while aligning, in [0, 1]. */
+        public static double MAX_TURN_POWER = 0.6;
+        /** Heading error (degrees) at which the robot counts as aligned and stops turning. */
+        public static double TOLERANCE_DEGREES = 1.0;
+        /** Once aligned, it stays still until the error exceeds this (degrees). */
+        public static double EXIT_TOLERANCE_DEGREES = 2.0;
+        /** Constant correction to the aim, degrees. Positive turns the robot further left. */
+        public static double TRIM_DEGREES = 0.0;
     }
 
     /**
@@ -685,7 +719,7 @@ public final class RobotConstants {
          * Second pose.
          */
         // TODO(team): measure this on the robot
-        public static double POSITION_B = .59;
+        public static double POSITION_B = .45;
     }
 
     /**
@@ -718,6 +752,8 @@ public final class RobotConstants {
         public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
         public static final Pose START_POSE = new Pose(56, 8, Math.toRadians(90.0));
         public static final Pose OPPOSE_POSE = new Pose(56, 136, Math.toRadians(270.0));
+        /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 X. */
+        public static final Pose BOTTOM_SHOOT = new Pose(58, 14, Math.toRadians(90.0));
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
         public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));
