@@ -51,7 +51,7 @@ public class MainTeleOp extends OpMode {
      * touched (no hardware lookup, no power), so TeleOp runs fine without
      * them configured.
      */
-    private static final boolean TURRET_ENABLED = true;
+    private static final boolean TURRET_ENABLED = false;
 
     /**
      * Set to {@code true} to bring back the two-position {@code flower} servo
