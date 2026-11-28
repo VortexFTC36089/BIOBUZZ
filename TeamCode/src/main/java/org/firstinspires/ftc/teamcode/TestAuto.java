@@ -380,6 +380,8 @@ public class TestAuto extends LinearOpMode {
             telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (atSpeed=%b)",
                     outtake.getLeftRpm(), outtake.getRightRpm(), outtake.atSpeed());
             telemetry.addData("Outtake Gate", outtake.isGateOpen() ? "OPEN" : "CLOSED");
+            // The last position sent to the servo, not a measurement of where it is.
+            telemetry.addData("Flower servo command", "%.2f", flowerServo.getPosition());
 
             if (follower.currentPath() != null) {
                 telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());

@@ -731,7 +731,7 @@ public final class RobotConstants {
          * RT is held.
          */
         // TODO(team): measure this on the robot
-        public static double POSITION_C = .47;
+        public static double POSITION_C = .50;
 
         /** Time the twitch holds each of the two poses before switching, milliseconds. */
         // TODO(team): tune on the robot
