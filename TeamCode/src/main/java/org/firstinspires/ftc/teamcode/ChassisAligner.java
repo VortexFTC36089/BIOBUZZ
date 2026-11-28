@@ -7,10 +7,11 @@ import com.pedropathing.math.Pose;
  * OpMode sends the returned power to the follower as its manual turn command.
  *
  * <p>It aims like the turret does: at the top hive side in the top half of the field and at
- * the bottom side in the bottom half, using the same hive coordinates, switch line,
- * hysteresis and pivot offset from {@link RobotConstants.Turret}. The heading it asks for
- * puts the hive straight ahead of the turret pivot, so a turret held at 0 degrees points at
- * it. Gains and tolerances are in {@link RobotConstants.ChassisAlign}.
+ * the bottom side in the bottom half, using the same hive coordinates, switch line and
+ * hysteresis from {@link RobotConstants.Turret}. The aim is worked out from the Pinpoint
+ * position with the chassis's own offsets, not the turret's pivot offsets. The heading it
+ * asks for puts the hive straight ahead of the offset aim point. The offsets, trim, gains
+ * and tolerances are in {@link RobotConstants.ChassisAlign}.
  */
 public class ChassisAligner {
 
@@ -50,7 +51,8 @@ public class ChassisAligner {
     double turnPower(Pose pose, double dtSeconds) {
         selectSide(pose.y());
 
-        double error = wrap(headingToHive(pose.x(), pose.y(), topSide) - pose.heading());
+        double error = wrap(headingToHive(pose.x(), pose.y(), pose.heading(), topSide)
+                - pose.heading());
         if (Double.isNaN(error)) {
             // A bad pose must not turn the robot.
             onTarget = false;
@@ -84,24 +86,33 @@ public class ChassisAligner {
     }
 
     /**
-     * @return the field heading (radians) that points a straight-ahead turret at the given
-     *         hive side from this position, including
+     * Aims from a point on the robot placed by
+     * {@link RobotConstants.ChassisAlign#OFFSET_X_INCHES} and
+     * {@link RobotConstants.ChassisAlign#OFFSET_Y_INCHES}. That point moves as the robot
+     * turns, so call this again with each new pose.
+     *
+     * @param x       Pinpoint X, inches
+     * @param y       Pinpoint Y, inches
+     * @param heading Pinpoint heading, radians
+     * @param top     true for the top hive side, false for the bottom side
+     * @return the field heading (radians) toward the hive side from that point, including
      *         {@link RobotConstants.ChassisAlign#TRIM_DEGREES}
      */
-    public static double headingToHive(double x, double y, boolean top) {
+    public static double headingToHive(double x, double y, double heading, boolean top) {
         double hiveX = top
                 ? RobotConstants.Turret.TOP_TARGET_X_INCHES
                 : RobotConstants.Turret.BOTTOM_TARGET_X_INCHES;
         double hiveY = top
                 ? RobotConstants.Turret.TOP_TARGET_Y_INCHES
                 : RobotConstants.Turret.BOTTOM_TARGET_Y_INCHES;
-        double distance = Math.hypot(hiveX - x, hiveY - y);
-        // The pivot sits OFFSET_Y to the left of the robot's center, so the center has to
-        // point that much to the side of the hive. (OFFSET_X lies along the shot line.)
-        double offsetAngle = distance > 1e-6
-                ? Math.asin(clip(RobotConstants.Turret.OFFSET_Y_INCHES / distance, -1.0, 1.0))
-                : 0.0;
-        return wrap(Math.atan2(hiveY - y, hiveX - x) - offsetAngle
+        // Robot frame -> field frame, the same way TurretSubsystem places its pivot.
+        double offsetX = RobotConstants.ChassisAlign.OFFSET_X_INCHES;
+        double offsetY = RobotConstants.ChassisAlign.OFFSET_Y_INCHES;
+        double cos = Math.cos(heading);
+        double sin = Math.sin(heading);
+        double aimX = x + offsetX * cos - offsetY * sin;
+        double aimY = y + offsetX * sin + offsetY * cos;
+        return wrap(Math.atan2(hiveY - aimY, hiveX - aimX)
                 + Math.toRadians(RobotConstants.ChassisAlign.TRIM_DEGREES));
     }
 
