@@ -32,8 +32,8 @@ public class OuttakeSubsystem {
     private boolean gateRequestedOpen;
     private MotorState motorState = MotorState.OFF;
     private double targetRpm;
-    /** Kp from {@link ShooterRPMTable} for both wheels; 0 uses OuttakeControllerConfig. */
-    private double tableKp;
+    /** Kp of the current shot, for both wheels; 0 uses OuttakeControllerConfig. */
+    private double shotKp;
     private double measuredLeftRpm;
     private double measuredRightRpm;
     private double filteredLeftRpm;
@@ -95,8 +95,19 @@ public class OuttakeSubsystem {
      * @param pose current robot pose from the follower
      */
     public void outtakeFrom(Pose pose) {
-        setTargetRpm(ShooterRPMTable.rpmFor(pose));
-        tableKp = ShooterRPMTable.kpFor(pose);
+        outtakeAt(ShooterRPMTable.rpmFor(pose), ShooterRPMTable.kpFor(pose));
+    }
+
+    /**
+     * Uses a given RPM and Kp.
+     *
+     * @param rpm target flywheel speed
+     * @param kp  volts per RPM of error for both wheels; 0 uses
+     *            {@link OuttakeControllerConfig}
+     */
+    public void outtakeAt(double rpm, double kp) {
+        setTargetRpm(rpm);
+        shotKp = kp;
     }
 
     /**
@@ -109,7 +120,7 @@ public class OuttakeSubsystem {
             throw new IllegalArgumentException("Target RPM must be finite");
         }
         targetRpm = Math.max(0.0, rpm);
-        tableKp = 0.0;
+        shotKp = 0.0;
         motorState = targetRpm > 0.0 ? MotorState.SPINNING_UP : MotorState.OFF;
         if (targetRpm == 0.0) {
             setMotorPowers(0.0, 0.0);
@@ -287,12 +298,12 @@ public class OuttakeSubsystem {
 
     /** @return the left wheel Kp in use, in volts per RPM of error */
     public double getLeftKp() {
-        return tableKp > 0.0 ? tableKp : OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM;
+        return shotKp > 0.0 ? shotKp : OuttakeControllerConfig.LEFT_KP_VOLTS_PER_RPM;
     }
 
     /** @return the right wheel Kp in use, in volts per RPM of error */
     public double getRightKp() {
-        return tableKp > 0.0 ? tableKp : OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM;
+        return shotKp > 0.0 ? shotKp : OuttakeControllerConfig.RIGHT_KP_VOLTS_PER_RPM;
     }
 
     public double getLeftRpm() {

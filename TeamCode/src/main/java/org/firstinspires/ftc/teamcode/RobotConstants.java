@@ -241,7 +241,7 @@ public final class RobotConstants {
 
         /**
          * Gate servo that holds game pieces back from the flywheels. It is
-         * opened manually (Gamepad 2 left trigger in TeleOp) and is closed
+         * opened manually (Gamepad 2 L2 in TeleOp) and is closed
          * otherwise.
          */
         public static final String GATE_SERVO = "outtake_gate";
@@ -314,7 +314,7 @@ public final class RobotConstants {
          * {@code encoder gear teeth / turret ring teeth}.
          *
          * <p>Measure it instead of trusting it: on the Main TeleOp init screen, zero the
-         * turret (Gamepad 2 Y), turn it exactly ONE full turn by hand and read
+         * turret (Gamepad 2 Triangle), turn it exactly ONE full turn by hand and read
          * {@code ticks since zero}. Then set this to {@code 8192.0 / that number}
          * (22528 ticks means the value below is already right). A wrong value does not make
          * the turret spin; it makes it aim off by a constant factor.
@@ -665,7 +665,7 @@ public final class RobotConstants {
     }
 
     /**
-     * Gamepad 1 Y in Main TeleOp: the chassis turns to face the hive (see
+     * Gamepad 1 Triangle in Main TeleOp: the chassis turns to face the hive (see
      * {@link ChassisAligner}). It uses the hive coordinates, side switch and pivot offset in
      * {@link Turret}.
      *
@@ -718,6 +718,43 @@ public final class RobotConstants {
     }
 
     /**
+     * Flywheel RPM and Kp (P value, volts per RPM of error, both wheels) for each shooting
+     * spot Main TeleOp drives to. Pressing a spot's button uses these instead of
+     * {@link ShooterRPMTable}, until the robot is farther than
+     * {@link #RELEASE_DISTANCE_INCHES} from that spot and no longer driving to it.
+     * {@code ShooterRPMTable.TUNING_MODE} overrides them.
+     *
+     * <p>A Kp of 0 uses the Kp values in {@link OuttakeControllerConfig}.
+     *
+     * <p>Tunable from Panels (RobotConstants > ShotSpots). Panels edits are NOT saved
+     * to this file and are lost when the Robot Controller app restarts: when a value is
+     * right, copy it here.
+     */
+    @Configurable
+    public static final class ShotSpots {
+        // TODO(team): every RPM and Kp below is a placeholder; tune on the robot
+
+        /** Gamepad 1 Dpad Left: {@link Field#BOTTOM_ANGLE_SHOOT}. */
+        public static double BOTTOM_ANGLE_SHOOT_RPM = 2140;
+        public static double BOTTOM_ANGLE_SHOOT_KP = 0.031;
+
+        /** Gamepad 1 Dpad Right: {@link Field#TOP_ANGLE_SHOOT}. */
+        public static double TOP_ANGLE_SHOOT_RPM = 2200;
+        public static double TOP_ANGLE_SHOOT_KP = 0.031;
+
+        /** Gamepad 1 Square: {@link Field#BOTTOM_SHOOT}. */
+        public static double BOTTOM_SHOOT_RPM = 2220;
+        public static double BOTTOM_SHOOT_KP = 0.034;
+
+        /** Gamepad 1 Circle: {@link Field#OPPOSE_POSE}. */
+        public static double OPPOSE_POSE_RPM = 2180;
+        public static double OPPOSE_POSE_KP = 0.031;
+
+        /** How far (inches) from the spot the robot can be and still use its RPM and Kp. */
+        public static double RELEASE_DISTANCE_INCHES = 5.0;
+    }
+
+    /**
      * Two-position flower ramp servo.
      *
      * <p>Servo positions are unitless in {@code [0.0, 1.0]}. 0.0 and 1.0
@@ -747,7 +784,7 @@ public final class RobotConstants {
         /**
          * Third pose. The flower twitch moves between this and {@link #POSITION_B}:
          * {@link TestAuto} while it waits at point 5, {@link MainTeleOp} while Gamepad 1
-         * RT is held.
+         * R2 is held.
          */
         // TODO(team): measure this on the robot
         public static double POSITION_C = .50;
@@ -787,7 +824,7 @@ public final class RobotConstants {
         public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
         public static final Pose START_POSE = new Pose(56, 8, Math.toRadians(90.0));
         public static final Pose OPPOSE_POSE = new Pose(60, 146, Math.toRadians(270.0));
-        /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 X. */
+        /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 Square. */
         public static final Pose BOTTOM_SHOOT = new Pose(58, 14, Math.toRadians(90.0));
         public static final Pose BOTTOM_ANGLE_SHOOT = new Pose(25.4, 17.3, Math.toRadians(55));
         public static final Pose TOP_ANGLE_SHOOT = new Pose(29.5, 144.1, Math.toRadians(285));

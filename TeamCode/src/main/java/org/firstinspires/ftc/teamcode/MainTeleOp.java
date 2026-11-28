@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.DoubleSupplier;
 
 import static com.pedropathing.api.Paths.line;
 import static com.pedropathing.ivy.Scheduler.schedule;
@@ -34,7 +35,7 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
  * velocity-controlled dual outtake, two-position servo, and field-aimed turret.
  *
  * <p>Gamepad 1 drives; Gamepad 2 runs the scoring mechanisms. Bindings are
- * listed in {@link #init()} telemetry.
+ * listed in {@link #init()} telemetry. Buttons use their PS5 DualSense names.
  *
  * <p>Hardware: four mecanum motors and Pinpoint from {@link Constants}, plus
  * the intake, outtake, two-position servo, and two turret servos from
@@ -56,11 +57,41 @@ public class MainTeleOp extends OpMode {
 
     /**
      * Set to {@code true} to bring back the {@code flower} servo on Gamepad 1
-     * (A = positions A/B, hold RT = twitch). While {@code false} the servo is never touched (no
+     * (Cross = positions A/B, hold R2 = twitch). While {@code false} the servo is never touched (no
      * hardware lookup, no position command), so TeleOp runs fine without it
      * configured.
      */
     private static final boolean FLOWER_SERVO_ENABLED = true;
+
+    /**
+     * A drive-to-pose spot with its own flywheel RPM and Kp, set in
+     * {@link RobotConstants.ShotSpots}. The values are read every loop so Panels edits
+     * apply right away.
+     */
+    private enum ShotSpot {
+        BOTTOM_ANGLE_SHOOT(RobotConstants.Field.BOTTOM_ANGLE_SHOOT,
+                () -> RobotConstants.ShotSpots.BOTTOM_ANGLE_SHOOT_RPM,
+                () -> RobotConstants.ShotSpots.BOTTOM_ANGLE_SHOOT_KP),
+        TOP_ANGLE_SHOOT(RobotConstants.Field.TOP_ANGLE_SHOOT,
+                () -> RobotConstants.ShotSpots.TOP_ANGLE_SHOOT_RPM,
+                () -> RobotConstants.ShotSpots.TOP_ANGLE_SHOOT_KP),
+        BOTTOM_SHOOT(RobotConstants.Field.BOTTOM_SHOOT,
+                () -> RobotConstants.ShotSpots.BOTTOM_SHOOT_RPM,
+                () -> RobotConstants.ShotSpots.BOTTOM_SHOOT_KP),
+        OPPOSE_POSE(RobotConstants.Field.OPPOSE_POSE,
+                () -> RobotConstants.ShotSpots.OPPOSE_POSE_RPM,
+                () -> RobotConstants.ShotSpots.OPPOSE_POSE_KP);
+
+        final Pose pose;
+        final DoubleSupplier rpm;
+        final DoubleSupplier kp;
+
+        ShotSpot(Pose pose, DoubleSupplier rpm, DoubleSupplier kp) {
+            this.pose = pose;
+            this.rpm = rpm;
+            this.kp = kp;
+        }
+    }
 
     private Follower follower;
     private TurretSubsystem turret;
@@ -80,7 +111,7 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton turretHiveToggle = new ToggleButton();
     private final ToggleButton turretForwardToggle = new ToggleButton();
     private final ToggleButton alignToggle = new ToggleButton();
-    /** Turns the chassis toward the hive while {@link #aligning} (Gamepad 1 Y). */
+    /** Turns the chassis toward the hive while {@link #aligning} (Gamepad 1 Triangle). */
     private final ChassisAligner chassisAligner = new ChassisAligner();
     private boolean aligning;
     /** True while chassis align is holding the turret straight and must give it back. */
@@ -99,6 +130,8 @@ public class MainTeleOp extends OpMode {
     private boolean fieldCentric;
     private double fieldCentricOffsetRad;
     private boolean drivingToPose;
+    /** Spot whose RPM and Kp the flywheels use, or {@code null} to use the table. */
+    private ShotSpot shotSpot;
     private boolean servoAtPositionB;
     /** True while {@link #twitchFlower()} was running on the last loop. */
     private boolean flowerTwitching;
@@ -147,7 +180,7 @@ public class MainTeleOp extends OpMode {
         intake = new IntakeSubsystem(hardwareMap);
         outtake = new OuttakeSubsystem(hardwareMap);
 
-        // Two-position servo, toggled with Gamepad 1 A. Start at POSITION_A.
+        // Two-position servo, toggled with Gamepad 1 Cross. Start at POSITION_A.
         // Skipped entirely while FLOWER_SERVO_ENABLED is false.
         servoAtPositionB = false;
         if (FLOWER_SERVO_ENABLED) {
@@ -161,7 +194,7 @@ public class MainTeleOp extends OpMode {
         // picks the top or bottom hive side from the robot's Y position. The
         // constructor zeroes the through-bore encoder here. That zero is only
         // kept when no autonomous has just run (see below); then the turret
-        // must be pointing straight forward right now (or press Gamepad 2 Y on
+        // must be pointing straight forward right now (or press Gamepad 2 Triangle on
         // the init screen once it is). Must be built AFTER the follower and the
         // intake, because the encoder is read through one of their motor ports
         // (Turret.ENCODER_PORT). Skipped entirely while TURRET_ENABLED is false.
@@ -184,6 +217,7 @@ public class MainTeleOp extends OpMode {
         }
 
         drivingToPose = false;
+        shotSpot = null;
         aligning = false;
         turretHeldByAlign = false;
         speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
@@ -317,14 +351,14 @@ public class MainTeleOp extends OpMode {
             telemetry.addLine("Turret: DISABLED (TURRET_ENABLED = false)");
         }
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric)");
-        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  LB hold = slow");
+        telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  L1 hold = slow");
         telemetry.addLine("G1: Dpad Left = drive to top angle shot  |  Dpad Right = bottom angle shot");
-        telemetry.addLine("G1: X = drive to bottom shooting spot  |  B = drive to opposite pose  |  any stick cancels"
-                + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B  |  RT hold = twitch flower" : ""));
-        telemetry.addLine("G1: Y = align chassis to the hive on/off  |  turn stick cancels");
-        telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
-        telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
-        telemetry.addLine("G2: LT hold = open gate  |  RT press = shoot balls (waits for the turret to aim)");
+        telemetry.addLine("G1: Square = drive to bottom shooting spot  |  Circle = drive to opposite pose  |  any stick cancels"
+                + (FLOWER_SERVO_ENABLED ? "  |  Cross = servo A/B  |  R2 hold = twitch flower" : ""));
+        telemetry.addLine("G1: Triangle = align chassis to the hive on/off  |  turn stick cancels");
+        telemetry.addLine("G2: Cross hold = intake  |  Triangle hold = reverse intake");
+        telemetry.addLine("G2: Square hold = transfer  |  Circle hold = reverse transfer");
+        telemetry.addLine("G2: L2 hold = open gate  |  R2 press = shoot balls (waits for the turret to aim)");
         telemetry.addLine("Outtake flywheels run the whole time after Play");
         if (turret != null) {
             telemetry.addLine("Turret tracks the HIVE from Play on (top/bottom side picked from the robot's Y)");
@@ -334,7 +368,7 @@ public class MainTeleOp extends OpMode {
                     + " (Dpad LEFT must turn it LEFT and make the angle go UP)");
         }
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
-                ? "NOT CONNECTED (press Start+B on it)" : "connected");
+                ? "NOT CONNECTED (press Options+Circle on it)" : "connected");
         telemetry.update();
     }
 
@@ -391,10 +425,10 @@ public class MainTeleOp extends OpMode {
             drivingToPose = false;
         }
 
-        // ---- Chassis align to the hive (Gamepad 1 Y toggles) ----
+        // ---- Chassis align to the hive (Gamepad 1 Triangle toggles) ----
         // The left stick still drives while aligning; the turn stick hands control back.
         // Checked here, before speed scaling, like the cancel above.
-        if (alignToggle.update(gamepad1.y)) {
+        if (alignToggle.update(gamepad1.triangle)) {
             if (aligning) {
                 stopAlign();
             } else {
@@ -411,9 +445,10 @@ public class MainTeleOp extends OpMode {
         strafe *= activeSpeed;
         turn *= activeSpeed;
 
-        // Back resets the Pinpoint pose to the requested known position.
+        // Share (labeled Create on a PS5 controller) resets the Pinpoint pose to the
+        // requested known position.
         // Cancel automation first so it cannot immediately drive away from the reset pose.
-        if (backToggle.update(gamepad1.back)) {
+        if (backToggle.update(gamepad1.share)) {
             stopAlign();
             drivingToPose = false;
             follower.setPose(new Pose(2.5, 69, Math.toRadians(0.0)));
@@ -422,26 +457,27 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Optional drive-to-pose (each button needs its OWN edge detector) ----
-        // Gamepad 1 D-pad Left/Right: drive to the top/bottom angle-shot pose.
+        // Each of these also switches the flywheels to that spot's RPM and Kp.
+        // Gamepad 1 D-pad Left/Right: drive to the bottom/top angle-shot pose.
         if (topAngleShootToggle.update(gamepad1.dpad_left)) {
             stopAlign();
-            startDriveToPose(RobotConstants.Field.BOTTOM_ANGLE_SHOOT);
+            startDriveToShot(ShotSpot.BOTTOM_ANGLE_SHOOT);
         }
         if (bottomAngleShootToggle.update(gamepad1.dpad_right)) {
             stopAlign();
-            startDriveToPose(RobotConstants.Field.TOP_ANGLE_SHOOT);
+            startDriveToShot(ShotSpot.TOP_ANGLE_SHOOT);
         }
 
-        // Gamepad 1 X: drive to the bottom shooting spot.
-        if (homeToggle.update(gamepad1.x)) {
+        // Gamepad 1 Square: drive to the bottom shooting spot.
+        if (homeToggle.update(gamepad1.square)) {
             stopAlign();
-            startDriveToBottomShoot();
+            startDriveToShot(ShotSpot.BOTTOM_SHOOT);
         }
 
-        // Gamepad 1 B: drive to the opposite start pose.
-        if (opposeToggle.update(gamepad1.b)) {
+        // Gamepad 1 Circle: drive to the opposite start pose.
+        if (opposeToggle.update(gamepad1.circle)) {
             stopAlign();
-            startDriveToOppose();
+            startDriveToShot(ShotSpot.OPPOSE_POSE);
         }
 
         // ---- Drive ----
@@ -458,9 +494,9 @@ public class MainTeleOp extends OpMode {
             commandManualDrive(forward, strafe, turn);
         }
 
-        // ---- Flower ramp servo (Gamepad 1 A toggles, RT hold twitches) ----
+        // ---- Flower ramp servo (Gamepad 1 Cross toggles, R2 hold twitches) ----
         if (servo != null) {
-            if (servoToggle.update(gamepad1.a)) {
+            if (servoToggle.update(gamepad1.cross)) {
                 servoAtPositionB = !servoAtPositionB;
             }
             if (gamepad1.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
@@ -474,10 +510,10 @@ public class MainTeleOp extends OpMode {
             }
         }
 
-        // ---- Shoot balls (Gamepad 2 RT) ----
+        // ---- Shoot balls (Gamepad 2 R2) ----
         // Ivy sequence built in shootBalls() below (it also waits for the turret
         // to aim; SecondAuto has its own version). Rising edge starts it; it runs
-        // to completion. Face buttons and LT are ignored while it is active.
+        // to completion. Face buttons and L2 are ignored while it is active.
         boolean shootPressed = gamepad2.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE;
         boolean shooting = isShootActive();
         if (shootPressed && !wasShootTrigger && !shooting) {
@@ -489,8 +525,18 @@ public class MainTeleOp extends OpMode {
 
         // ---- Intake / outtake ----
         // Flywheels stay on for the whole TeleOp, including during shoot. Their RPM
-        // follows the distance to the hive (see ShooterRPMTable).
-        outtake.outtakeFrom(follower.pose());
+        // follows the distance to the hive (see ShooterRPMTable), except at a shot spot
+        // picked with a drive-to-pose button, which has its own RPM and Kp.
+        if (shotSpot != null && !drivingToPose
+                && follower.pose().distance(shotSpot.pose)
+                > RobotConstants.ShotSpots.RELEASE_DISTANCE_INCHES) {
+            shotSpot = null;
+        }
+        if (shotSpot != null && !ShooterRPMTable.TUNING_MODE) {
+            outtake.outtakeAt(shotSpot.rpm.getAsDouble(), shotSpot.kp.getAsDouble());
+        } else {
+            outtake.outtakeFrom(follower.pose());
+        }
         if (!shooting) {
             updateIntakeFromGamepad();
             outtake.setGateOpen(gamepad2.left_trigger > RobotConstants.Intake.TRIGGER_DEADZONE);
@@ -576,32 +622,14 @@ public class MainTeleOp extends OpMode {
         drivingToPose = true;
     }
 
-    private void startDriveToBottomShoot() {
-        startDriveToPose(RobotConstants.Field.BOTTOM_SHOOT);
+    /** Drives to a shot spot and switches the flywheels to its RPM and Kp. */
+    private void startDriveToShot(ShotSpot spot) {
+        shotSpot = spot;
+        startDriveToPose(spot.pose);
     }
 
     /**
-     * Starts a straight line from the robot's current pose to
-     * {@link RobotConstants.Field#OPPOSE_POSE} (the start pose at the other
-     * end of the field).
-     */
-    private void startDriveToOppose() {
-        Pose current = follower.pose();
-        Pose home = RobotConstants.Field.OPPOSE_POSE;
-
-        if (current.distance(home) < 0.5) {
-            follower.hold(home);
-            drivingToPose = false;
-            return;
-        }
-
-        Path homePath = line(current, home).linear(current, home);
-        follower.follow(homePath);
-        drivingToPose = true;
-    }
-
-    /**
-     * Gamepad 1 Y: starts turning the chassis toward the hive side on the robot's half of
+     * Gamepad 1 Triangle: starts turning the chassis toward the hive side on the robot's half of
      * the field. Ends any drive-to-pose. With
      * {@link RobotConstants.ChassisAlign#HOLD_TURRET_STRAIGHT} the turret is also held
      * straight ahead until {@link #stopAlign()}.
@@ -675,21 +703,21 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Gamepad 2 face buttons: A hold = intake, Y hold = reverse intake,
-     * X hold = transfer, B hold = reverse transfer.
+     * Gamepad 2 face buttons: Cross hold = intake, Triangle hold = reverse intake,
+     * Square hold = transfer, Circle hold = reverse transfer.
      */
     private void updateIntakeFromGamepad() {
-        if (gamepad2.y) {
+        if (gamepad2.triangle) {
             intake.reverse();
-        } else if (gamepad2.a) {
+        } else if (gamepad2.cross) {
             intake.intake();
         } else {
             intake.stopIntake();
         }
 
-        if (gamepad2.x) {
+        if (gamepad2.square) {
             intake.transfer();
-        } else if (gamepad2.b) {
+        } else if (gamepad2.circle) {
             intake.reverseTransfer();
         } else {
             intake.stopTransfer();
@@ -828,7 +856,7 @@ public class MainTeleOp extends OpMode {
                     chassisAligner.getErrorDegrees(),
                     chassisAligner.isAligned() ? " (ALIGNED)" : "");
         } else {
-            telemetry.addData("Chassis align", "OFF (G1 Y)");
+            telemetry.addData("Chassis align", "OFF (G1 Triangle)");
         }
         telemetry.addData("X (in)", pose.x());
         telemetry.addData("Y (in)", pose.y());
@@ -839,7 +867,12 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Slow mode", slowMode ? "ON" : "OFF");
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Transfer", intake.getTransferState());
-        ShooterRPMTable.addTelemetry(telemetry, pose);
+        if (shotSpot != null && !ShooterRPMTable.TUNING_MODE) {
+            telemetry.addData("Shooter spot", "%s: %.0f RPM, Kp L %.5f / R %.5f",
+                    shotSpot, outtake.getTargetRpm(), outtake.getLeftKp(), outtake.getRightKp());
+        } else {
+            ShooterRPMTable.addTelemetry(telemetry, pose);
+        }
         telemetry.addData("Outtake Motor", outtake.getMotorState());
         telemetry.addData("Outtake RPM (L/R)", "%.0f / %.0f (target=%.0f, atSpeed=%b)",
                 outtake.getLeftRpm(), outtake.getRightRpm(), outtake.getTargetRpm(), outtake.atSpeed());
@@ -857,7 +890,7 @@ public class MainTeleOp extends OpMode {
                 ? "TWITCHING"
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
-                ? "NOT CONNECTED (press Start+B on it)" : "connected");
+                ? "NOT CONNECTED (press Options+Circle on it)" : "connected");
         telemetry.addData("Drive to pose", drivingToPose ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();
