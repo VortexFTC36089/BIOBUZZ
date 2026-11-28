@@ -50,6 +50,8 @@ public class TestAuto extends LinearOpMode {
     private Pose start;
     private final Pose shootSpot = poseFactory.of(59, 11, 90);
     private final Pose somth = poseFactory.of(23.5, 57, 180);
+    private final Pose somth1 = poseFactory.of(55,96, 0);
+    private final Pose somth2 = poseFactory.of(47.5,124.89, 90);
     private Pose point1;
     private Pose point2;
     private Pose point2Control1;
@@ -175,6 +177,11 @@ public class TestAuto extends LinearOpMode {
                 // Same curve driven backwards, so the control points are in reverse order.
                 follow(follower, Paths.curve(point4, point4Control2, point4Control1, point3).linear(point4, point3)),
                 shootBalls(),
+                follow(follower, Paths.curve(point4, somth1, point6).linear(point4, point6)),
+                flowerPositionB(),
+                runIntakeAndTransfer(),
+                waitMs(700),
+                follow(follower, Paths.line(point6,somth2)).linear(point6, somth2),
                 follow(follower, Paths.line(point3, park).linear(point3, park))
         );
     }

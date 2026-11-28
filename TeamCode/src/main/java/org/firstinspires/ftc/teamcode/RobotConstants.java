@@ -767,11 +767,11 @@ public final class RobotConstants {
         // TODO(team): replace with measured field poses after localization is tuned
         public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
         public static final Pose START_POSE = new Pose(56, 8, Math.toRadians(90.0));
-        public static final Pose OPPOSE_POSE = new Pose(58, 135, Math.toRadians(270.0));
+        public static final Pose OPPOSE_POSE = new Pose(60, 146, Math.toRadians(270.0));
         /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 X. */
         public static final Pose BOTTOM_SHOOT = new Pose(58, 14, Math.toRadians(90.0));
         public static final Pose BOTTOM_ANGLE_SHOOT = new Pose(25.4, 17.3, Math.toRadians(55));
-        public static final Pose TOP_ANGLE_SHOOT = new Pose(27, 140, Math.toRadians(325));
+        public static final Pose TOP_ANGLE_SHOOT = new Pose(29.5, 144.1, Math.toRadians(285));
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
         public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));
@@ -826,10 +826,10 @@ public final class RobotConstants {
          * Speed limit for the point 1 -> point 2 curve only, as a fraction of the robot's
          * top speed: 0.3 is 70% slower, 1 is no limit. Kept between 0.1 and 1.
          */
-        @Sorter(sort = 25) public static double POINT2_SPEED = 0.7;
+        @Sorter(sort = 25) public static double POINT2_SPEED = 0.5;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
-        @Sorter(sort = 30) public static double POINT3_X = 59;
+        @Sorter(sort = 30) public static double POINT3_X = 60;
         @Sorter(sort = 31) public static double POINT3_Y = 146;
         @Sorter(sort = 32) public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
@@ -851,14 +851,16 @@ public final class RobotConstants {
         @Sorter(sort = 46) public static double POINT4_CONTROL2_Y = 122;
 
         // ---- Point 5: straight line from point 4 and back ----
-        @Sorter(sort = 50) public static double POINT5_X = 21;
+        @Sorter(sort = 50) public static double POINT5_X = 22.5;
         @Sorter(sort = 51) public static double POINT5_Y = 57;
         @Sorter(sort = 52) public static double POINT5_HEADING_DEG = 180;
 
         // ---- Point 6: straight line from point 3 ----
-        @Sorter(sort = 60) public static double POINT6_X = 56;
-        @Sorter(sort = 61) public static double POINT6_Y = 8;
+        @Sorter(sort = 60) public static double POINT6_X = 47.5;
+        @Sorter(sort = 61) public static double POINT6_Y = 119.89;
         @Sorter(sort = 62) public static double POINT6_HEADING_DEG = 90;
+
+
 
         // ---- Park: final straight line from point 6 ----
         @Sorter(sort = 70) public static double PARK_X = 17;
