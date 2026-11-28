@@ -19,6 +19,7 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
@@ -150,7 +151,10 @@ public class TestAuto extends LinearOpMode {
                 shootBalls(),
                 runIntakeAndTransfer(),
                 follow(follower, Paths.line(start, point1).linear(start, point1)),
-                follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)),
+                // Slowed. Pedro applies the limit only while it follows this one path.
+                follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)
+                        .with(Constants.foresightConfig.maxPathSpeed.at(Range.clip(
+                                RobotConstants.TestAutoPoints.POINT2_SPEED, 0.1, 1.0)))),
                 waitMs(200),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
@@ -360,6 +364,9 @@ public class TestAuto extends LinearOpMode {
 
             telemetry.update();
         }
+        // Ends any path still running, so a Stop during the slowed curve cannot leave its
+        // speed limit on for later OpModes.
+        follower.stop();
         flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
         if (turret != null) {
             turret.stop();

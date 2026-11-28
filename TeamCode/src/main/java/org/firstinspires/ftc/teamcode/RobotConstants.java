@@ -810,6 +810,11 @@ public final class RobotConstants {
         /** Bezier control point of the point 1 -> point 2 curve. */
         @Sorter(sort = 23) public static double POINT2_CONTROL1_X = 80;
         @Sorter(sort = 24) public static double POINT2_CONTROL1_Y = 20;
+        /**
+         * Speed limit for the point 1 -> point 2 curve only, as a fraction of the robot's
+         * top speed: 0.3 is 70% slower, 1 is no limit. Kept between 0.1 and 1.
+         */
+        @Sorter(sort = 25) public static double POINT2_SPEED = 0.3;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
         @Sorter(sort = 30) public static double POINT3_X = 59;
