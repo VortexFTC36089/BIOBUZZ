@@ -774,7 +774,7 @@ public final class RobotConstants {
         // TODO(team): replace with measured field poses after localization is tuned
         public static final Pose HOME_POSE = new Pose(0.0, 0.0, Math.toRadians(0.0));
         public static final Pose START_POSE = new Pose(56, 8, Math.toRadians(90.0));
-        public static final Pose OPPOSE_POSE = new Pose(69, 140, Math.toRadians(270.0));
+        public static final Pose OPPOSE_POSE = new Pose(58, 135, Math.toRadians(270.0));
         /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 X. */
         public static final Pose BOTTOM_SHOOT = new Pose(58, 14, Math.toRadians(90.0));
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));

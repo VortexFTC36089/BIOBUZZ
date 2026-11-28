@@ -218,7 +218,8 @@ public class TestAuto extends LinearOpMode {
                         waitMs(RobotConstants.Auto.SPIN_UP_TIMEOUT_MS)
                 ),
                 race(
-                        waitUntil(() -> turret.isAimedAtTarget() || turret.hasEncoderFault()),
+                        waitUntil(() -> turret == null
+                                || turret.isAimedAtTarget() || turret.hasEncoderFault()),
                         waitMs(RobotConstants.Turret.AIM_WAIT_TIMEOUT_MS)
                 ),
                 instant(() -> outtake.setGateOpen(true)),
@@ -269,22 +270,28 @@ public class TestAuto extends LinearOpMode {
         syncStartPose();
 
         // Turret: built AFTER the follower, because its encoder is read through a
-        // drive motor port (Turret.ENCODER_PORT). It tracks the hive from Play on.
-        turret = new TurretSubsystem(hardwareMap);
-        turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        // drive motor port (Turret.ENCODER_PORT). Not built at all while disabled.
+        if (TURRET_ENABLED) {
+            turret = new TurretSubsystem(hardwareMap);
+            turret.setMode(TurretSubsystem.TurretMode.TRACKING);
+        }
 
         // While waiting for Play, keep declaring "where the turret points now" as
         // straight forward, so the zero is the one at the moment Play is pressed.
         // The turret must be facing the same way as the robot then. TeleOp restores
         // this zero, so it knows where the turret really points after autonomous.
         while (opModeInInit()) {
-            turret.resetAngle();
+            int turretZeroTicks = 0;
+            if (turret != null) {
+                turret.resetAngle();
+                turretZeroTicks = turret.getZeroOffsetTicks();
+            }
             if (isStopRequested()) {
                 // Stop interrupts the hub read and the SDK then returns 0 instead of
                 // the real count. Keep the last good count.
                 break;
             }
-            blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turret.getZeroOffsetTicks());
+            blackboard.put(RobotBlackboard.LAST_AUTO_TURRET_ZERO_TICKS, turretZeroTicks);
             // Pick up path points edited in Panels (a changed start pose moves the follower).
             syncStartPose();
             // Same for the flower ramp's starting position.
@@ -297,10 +304,13 @@ public class TestAuto extends LinearOpMode {
                     RobotConstants.TestAutoPoints.START_X,
                     RobotConstants.TestAutoPoints.START_Y,
                     RobotConstants.TestAutoPoints.START_HEADING_DEG);
+            if (turret == null) {
+                telemetry.addLine("Turret: DISABLED in this auto (TURRET_ENABLED = false)");
+            }
             telemetry.addLine("Point the turret STRAIGHT FORWARD (same way as the robot)."
                     + " Its zero is taken when you press Play.");
             telemetry.addData("Turret encoder", "port '%s', ticks %d",
-                    RobotConstants.Turret.ENCODER_PORT, turret.getEncoderTicks());
+                    RobotConstants.Turret.ENCODER_PORT, turretZeroTicks);
             telemetry.addData("TeleOp after this auto", RobotConstants.OpModeNames.TELEOP_AFTER_AUTO);
             telemetry.update();
             sleep(20);
@@ -321,14 +331,20 @@ public class TestAuto extends LinearOpMode {
             if (!isStopRequested()) {
                 blackboard.put(RobotBlackboard.LAST_AUTO_POSE, follower.pose());
                 // Aim at the hive; the robot's Y picks the top or bottom side.
-                turret.update(follower.pose());
+                if (turret != null) {
+                    turret.update(follower.pose());
+                }
             }
             Scheduler.execute();
             // Apply whatever the commands requested this loop to the hardware.
             intake.update();
             outtake.update();
 
-            turret.addTelemetry(telemetry);
+            if (turret != null) {
+                turret.addTelemetry(telemetry);
+            } else {
+                telemetry.addData("Turret", "DISABLED (TURRET_ENABLED = false)");
+            }
             telemetry.addData("x", follower.pose().x());
             telemetry.addData("y", follower.pose().y());
             telemetry.addData("heading", follower.pose().heading());
@@ -344,6 +360,8 @@ public class TestAuto extends LinearOpMode {
             telemetry.update();
         }
         flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_A);
-        turret.stop();
+        if (turret != null) {
+            turret.stop();
+        }
     }
 }
