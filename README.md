@@ -102,13 +102,15 @@ SDK samples stay in `FtcRobotController/.../external/samples/` and are already `
 | **Test: Intake** | Test | Intake and transfer motors |
 | **Test: Outtake** | Test | Dual outtake motors at `Outtake.TARGET_RPM` |
 | **Test: Motor PIDF Finder** | Test | Live velocity PIDF tuner for the shooter motors |
-| **Test: Drive Directions** | Test | Spin one wheel at a time (A/B/X/Y) |
+| **Test: Drive Directions** | Test | Spin one wheel at a time (Cross/Circle/Square/Triangle) |
 | **Test: Hardware Bench** | Test | Generic motor/servo bench tester (`motor_0..3`, `servo_1..3`) |
 | Pedro AutoTune | Browser | See section 6 (not a normal DS list item) |
 
 Safe order the first time you have a robot: **Test: Drive Directions** → **Test: Intake** → **Main TeleOp** on a stand → **Main TeleOp** on the floor.
 
-Do **not** press gamepad 1 **X** or **B** (drive to a pose) or run Foresight tests until Pinpoint is tuned. Those move the robot using localization.
+Button names are for PS5 DualSense controllers (the DualSense Edge is not supported). On the Driver Station, press **Options + Cross** to make a controller gamepad 1 and **Options + Circle** to make it gamepad 2.
+
+Do **not** press gamepad 1 **Square** or **Circle** (drive to a pose) or run Foresight tests until Pinpoint is tuned. Those move the robot using localization.
 
 **Main TeleOp init screen (between Init and Play).** Nothing moves here and the turret servos are unpowered. No buttons do anything here. The screen shows the start pose the turret will aim from (where the last autonomous ended, or the default start pose if TeleOp is started on its own). It also shows the live turret angle and encoder ticks, and lists every motor port whose encoder count has changed since Init: turn the turret by hand and the port named by `Turret.ENCODER_PORT` must appear in that list (if another port appears instead, the turret is reading the wrong port and cannot aim). One full turn by hand must read 360°. Straight after an autonomous the turret zero is kept from that autonomous, so the turret shows its real angle and does not have to be touched; otherwise it is zeroed at Init, so it must point straight forward then and read 0.0. Turning it left by hand must make the angle go up. The turret starts moving by itself on Play.
 
@@ -119,23 +121,24 @@ Do **not** press gamepad 1 **X** or **B** (drive to a pose) or run Foresight tes
 | Left stick | Forward / strafe |
 | Right stick X | Turn |
 | Dpad Up / Down | Drive speed +10% / -10% |
-| Left bumper (hold) | Slow mode (30%) |
-| X | Follow a line to the start pose `Field.START_POSE` (cancels if you move a stick) |
-| B | Follow a line to the opposite start pose `Field.OPPOSE_POSE` (cancels if you move a stick) |
-| Back | Set current heading as field-centric forward (preserves localizer pose for turret). Field-centric drive itself has no button bound right now. |
-| A | Toggle servo `flower` between `FlowerRamp.POSITION_A` / `POSITION_B` (both tunable in Panels; turn off with `FLOWER_SERVO_ENABLED` in `MainTeleOp`) |
+| L1 (hold) | Slow mode (30%) |
+| Square | Follow a line to the start pose `Field.START_POSE` (cancels if you move a stick) |
+| Circle | Follow a line to the opposite start pose `Field.OPPOSE_POSE` (cancels if you move a stick) |
+| Dpad Left / Right, Square, Circle | Also switch the flywheels to that spot's RPM and Kp from `RobotConstants.ShotSpots`, until the robot is more than `RELEASE_DISTANCE_INCHES` from it |
+| Share (Create) | Set current heading as field-centric forward (preserves localizer pose for turret). Field-centric drive itself has no button bound right now. |
+| Cross | Toggle servo `flower` between `FlowerRamp.POSITION_A` / `POSITION_B` (both tunable in Panels; turn off with `FLOWER_SERVO_ENABLED` in `MainTeleOp`) |
 
 ### Main TeleOp (gamepad 2 — mechanisms)
 
 | Input | Action |
 |---|---|
-| A (hold) | Intake |
-| Y (hold) | Reverse intake |
-| X (hold) | Run transfer motor |
-| B (hold) | Reverse transfer motor |
+| Cross (hold) | Intake |
+| Triangle (hold) | Reverse intake |
+| Square (hold) | Run transfer motor |
+| Circle (hold) | Reverse transfer motor |
 | (none, automatic) | Outtake motors run at `Outtake.TARGET_RPM` from Play until Stop |
-| Left trigger (hold) | Open outtake gate (closes on release; ignored while RT shoot is running) |
-| Right trigger (press) | Run `shootBalls` (wait for flywheels → wait up to `Turret.AIM_WAIT_TIMEOUT_MS` for the turret to be aimed, only while it is tracking → open gate → feed → stop) |
+| L2 (hold) | Open outtake gate (closes on release; ignored while R2 shoot is running) |
+| R2 (press) | Run `shootBalls` (wait for flywheels → wait up to `Turret.AIM_WAIT_TIMEOUT_MS` for the turret to be aimed, only while it is tracking → open gate → feed → stop) |
 | (none, automatic) | Turret aims at the hive from Play on, top or bottom side picked from the robot's Y (`Turret.TOP_TARGET_*` / `BOTTOM_TARGET_*`) |
 | Dpad Up | Turret: face straight ahead on the robot and hold that. Also clears a turret fault stop and retries |
 | Dpad Down | Turret: track the hive (encoder angle + hive position; the robot's field Y picks the top or bottom side). Also clears a turret fault stop and retries |
@@ -213,7 +216,7 @@ Docs: https://pedropathing.com/docs/pathing/tuning/foresight
 - [ ] **Tests → Curve** if you will use curves
 - [ ] `Main TeleOp`: robot-centric drive, slow mode, and the start pose on the init screen is right
 - [ ] Measure a real start pose (inches + heading)
-- [ ] Replace `RobotConstants.Field.START_POSE` / `OPPOSE_POSE` with measured poses before using gamepad 1 **X** / **B**
+- [ ] Replace `RobotConstants.Field.START_POSE` / `OPPOSE_POSE` with measured poses before using gamepad 1 **Square** / **Circle**
 - [ ] Confirm intake direction on real game pieces
 
 ---

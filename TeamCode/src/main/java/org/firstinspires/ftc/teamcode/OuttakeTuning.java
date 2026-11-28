@@ -6,12 +6,12 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 /**
  * Live gamepad tuner for the custom outtake Ks + Kv + Kp velocity controller.
  *
- * <p>Gamepad 1: A run/stop, LB/RB select wheel, D-pad Left/Right select Ks/Kv/Kp,
- * D-pad Up/Down adjust the selected gain, B/X increase/decrease its step size by
- * a factor of ten. Each gain retains its own step size. Gamepad 2 D-pad Up/Down
- * changes the target RPM, and gamepad 2 A switches between the primary and
- * secondary target RPM presets. Values are also exposed through the configurable
- * panel.
+ * <p>Gamepad 1: Cross run/stop, L1/R1 select wheel, D-pad Left/Right select Ks/Kv/Kp,
+ * D-pad Up/Down adjust the selected gain, Circle/Square increase/decrease its step
+ * size by a factor of ten. Each gain retains its own step size. Gamepad 2 D-pad
+ * Up/Down changes the target RPM, and gamepad 2 Cross switches between the primary
+ * and secondary target RPM presets. Values are also exposed through the
+ * configurable panel.
  */
 @TeleOp(name = "Test: Outtake Ks Kv Kp Tuning", group = RobotConstants.OpModeGroups.TEST)
 public class OuttakeTuning extends OpMode {
@@ -51,7 +51,7 @@ public class OuttakeTuning extends OpMode {
 
         telemetry.setMsTransmissionInterval(50);
         telemetry.addLine("Outtake Ks/Kv/Kp tuner ready");
-        telemetry.addLine("G1 A run/stop | LB/RB wheel | D-pad L/R gain | D-pad U/D adjust");
+        telemetry.addLine("G1 Cross run/stop | L1/R1 wheel | D-pad L/R gain | D-pad U/D adjust");
         telemetry.addLine("G2 D-pad U/D target RPM +/-");
         telemetry.addLine("Start with low target RPM and increase output conservatively.");
         telemetry.update();
@@ -78,11 +78,11 @@ public class OuttakeTuning extends OpMode {
         if (decreaseGain.update(gamepad1.dpad_down)) {
             adjustSelectedGain(-1.0);
         }
-        if (increaseGainStep.update(gamepad1.b)) {
+        if (increaseGainStep.update(gamepad1.circle)) {
             gainSteps[gainIndex] = Math.min(
                     MAX_GAIN_STEPS[gainIndex], gainSteps[gainIndex] * 10.0);
         }
-        if (decreaseGainStep.update(gamepad1.x)) {
+        if (decreaseGainStep.update(gamepad1.square)) {
             gainSteps[gainIndex] = Math.max(
                     MIN_GAIN_STEPS[gainIndex], gainSteps[gainIndex] / 10.0);
         }
@@ -92,13 +92,13 @@ public class OuttakeTuning extends OpMode {
         if (decreaseTarget.update(gamepad2.dpad_down)) {
             targetRpm = Math.max(0.0, targetRpm - TARGET_RPM_STEP);
         }
-        if (switchTargetPreset.update(gamepad2.a)) {
+        if (switchTargetPreset.update(gamepad2.cross)) {
             secondaryTargetSelected = !secondaryTargetSelected;
             targetRpm = secondaryTargetSelected
                     ? RobotConstants.Outtake.SECONDARY_TARGET_RPM
                     : RobotConstants.Outtake.TARGET_RPM;
         }
-        if (runToggle.update(gamepad1.a)) {
+        if (runToggle.update(gamepad1.cross)) {
             running = !running;
         }
 

@@ -9,7 +9,7 @@ package org.firstinspires.ftc.teamcode;
  * previous value so callers can write:
  *
  * <pre>
- * if (intakeToggle.update(gamepad1.a)) {
+ * if (intakeToggle.update(gamepad1.cross)) {
  *     intake.toggleIntake();
  * }
  * </pre>
