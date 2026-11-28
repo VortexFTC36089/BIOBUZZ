@@ -694,24 +694,9 @@ public final class RobotConstants {
         public static double TOLERANCE_DEGREES = 1.0;
         /** Once aligned, it stays still until the error exceeds this (degrees). */
         public static double EXIT_TOLERANCE_DEGREES = 2.0;
-        /** It only counts as aligned once it is turning slower than this (degrees/second). */
-        public static double MAX_ALIGNED_RATE_DEGREES_PER_SECOND = 15.0;
-        /**
-         * Constant correction to the aim, degrees. Positive turns the robot further left.
-         * Only fixes an error that is the same everywhere on the field, not one that flips
-         * between left and right.
-         */
+        /** Constant correction to the aim, degrees. Positive turns the robot further left. */
         public static double TRIM_DEGREES = 0.0;
-
-        // Corrections (inches) added to the Turret hive coordinates for the chassis aim point.
-        // Fill these in from ChassisAligner.estimateHivePoint (measured minus Turret target).
-        // If the turret misses the same way, fix the Turret coordinates instead and leave these 0.
-        public static double TOP_AIM_DX_INCHES = 0.0;
-        public static double TOP_AIM_DY_INCHES = 0.0;
-        public static double BOTTOM_AIM_DX_INCHES = 0.0;
-        public static double BOTTOM_AIM_DY_INCHES = 0.0;
     }
-
 
     /**
      * Flywheel RPM and Kp (P value, volts per RPM of error, both wheels) for each shooting
