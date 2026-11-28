@@ -49,7 +49,7 @@ public class TestAuto extends LinearOpMode {
     // are not final. Control points only use X and Y (a Bezier control point has no heading).
     private Pose start;
     private final Pose shootSpot = poseFactory.of(59, 11, 90);
-    private final Pose somth = poseFactory.of(21, 57, 180);
+    private final Pose somth = poseFactory.of(23.5, 57, 180);
     private Pose point1;
     private Pose point2;
     private Pose point2Control1;
