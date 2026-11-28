@@ -724,6 +724,17 @@ public final class RobotConstants {
          */
         // TODO(team): measure this on the robot
         public static double POSITION_B = .46;
+
+        /**
+         * Third pose. {@link TestAuto} twitches between this and {@link #POSITION_B}
+         * while it waits at point 5.
+         */
+        // TODO(team): measure this on the robot
+        public static double POSITION_C = .47;
+
+        /** Time the twitch holds each of the two poses before switching, milliseconds. */
+        // TODO(team): tune on the robot
+        public static double TWITCH_INTERVAL_MS = 500;
     }
 
     /**

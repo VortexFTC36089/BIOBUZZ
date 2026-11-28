@@ -19,6 +19,7 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -165,7 +166,7 @@ public class TestAuto extends LinearOpMode {
                 runIntakeAndTransfer(),
                 waitMs(750),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
-                waitMs(2000),
+                twitchFlower(2000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
                 flowerPositionA(),
@@ -184,6 +185,26 @@ public class TestAuto extends LinearOpMode {
     /** Moves the flower servo to position B. */
     public Command flowerPositionB() {
         return instant(() -> flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_B));
+    }
+
+    /**
+     * Twitches the flower servo between positions B and C for {@code durationMs}, starting
+     * with a move to C, and leaves it at B.
+     */
+    public Command twitchFlower(double durationMs) {
+        ElapsedTime timer = new ElapsedTime();
+        return Command.build()
+                .setStart(timer::reset)
+                .setExecute(() -> {
+                    long step = (long) (timer.milliseconds()
+                            / RobotConstants.FlowerRamp.TWITCH_INTERVAL_MS);
+                    flowerServo.setPosition(step % 2 == 0
+                            ? RobotConstants.FlowerRamp.POSITION_C
+                            : RobotConstants.FlowerRamp.POSITION_B);
+                })
+                .setDone(() -> timer.milliseconds() >= durationMs)
+                .setEnd(endCondition ->
+                        flowerServo.setPosition(RobotConstants.FlowerRamp.POSITION_B));
     }
 
     /** Starts both the intake and transfer motors. */
