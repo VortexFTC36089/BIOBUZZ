@@ -1,8 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
 import static com.pedropathing.api.Paths.*;
-import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.api.Paths;
+
 import com.pedropathing.api.PoseFactory;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
@@ -18,141 +18,44 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Configurable
 @Autonomous(name = "Auto_2_Tip_H", group = "Autonomous")
 public class Auto_2_Tip_H extends LinearOpMode {
-
-    // Path points, editable in Panels (Auto_2_Tip_H) before Play. X and Y are Pedro field
-    // inches, headings are degrees. A CONTROL point only shapes a curve. Each path starts
-    // where the one before it ends. Panels edits are NOT saved to this file.
-
-    public static double START_X = 56;
-    public static double START_Y = 8;
-    public static double START_HEADING_DEG = 90;
-
-    public static double BOTTOM_SHOOT_X = 58;
-    public static double BOTTOM_SHOOT_Y = 14;
-    public static double BOTTOM_SHOOT_HEADING_DEG = 90;
-
-    /** The robot faces along the curve on the way here, so there is no heading to set. */
-    public static double INTAKE_GARDEN_X = 13;
-    public static double INTAKE_GARDEN_Y = 10;
-    public static double INTAKE_GARDEN_CONTROL1_X = 48;
-    public static double INTAKE_GARDEN_CONTROL1_Y = 9;
-
-    /** Heading the drive from the intake garden to the top shot starts from. */
-    public static double TOP_SHOOT_START_HEADING_DEG = 180;
-    public static double TOP_SHOOT_X = 64;
-    public static double TOP_SHOOT_Y = 130;
-    public static double TOP_SHOOT_HEADING_DEG = 270;
-    public static double TOP_SHOOT_CONTROL1_X = 19;
-    public static double TOP_SHOOT_CONTROL1_Y = 78;
-    public static double TOP_SHOOT_CONTROL2_X = 38;
-    public static double TOP_SHOOT_CONTROL2_Y = 103;
-
-    public static double TOP_FLOWER_X = 54;
-    public static double TOP_FLOWER_Y = 120;
-    public static double TOP_FLOWER_HEADING_DEG = 90;
-    public static double TOP_FLOWER_CONTROL1_X = 54;
-    public static double TOP_FLOWER_CONTROL1_Y = 94;
-
-    public static double FLOWER_INTAKE_X = 54;
-    public static double FLOWER_INTAKE_Y = 125;
-    public static double FLOWER_INTAKE_HEADING_DEG = 90;
-
-    public static double TOP_SHOOT_2_X = 64;
-    public static double TOP_SHOOT_2_Y = 130;
-    public static double TOP_SHOOT_2_HEADING_DEG = 270;
-    public static double TOP_SHOOT_2_CONTROL1_X = 53;
-    public static double TOP_SHOOT_2_CONTROL1_Y = 97;
-
-    public static double PARK_X = 17;
-    public static double PARK_Y = 93;
-    public static double PARK_HEADING_DEG = 270;
-    public static double PARK_CONTROL1_X = 61;
-    public static double PARK_CONTROL1_Y = 121;
 
     private Follower follower;
 
     private final PoseFactory poseFactory = PoseFactory.degrees();
 
-    private Pose start;
-    private Pose bOTTOMSHOOT;
-    private Pose iNTAKEGARDEN;
-    private Pose iNTAKEGARDENControl1;
-    private Pose tOPSHOOTStart;
-    private Pose tOPSHOOT;
-    private Pose tOPSHOOTControl1;
-    private Pose tOPSHOOTControl2;
-    private Pose tOPFLOWERStart;
-    private Pose tOPFLOWER;
-    private Pose tOPFLOWERControl1;
-    private Pose fLOWERINTAKE;
-    private Pose tOPSHOOT_2Start;
-    private Pose tOPSHOOT_2;
-    private Pose tOPSHOOT_2Control1;
-    private Pose pARKStart;
-    private Pose pARK;
-    private Pose pARKControl1;
-
-    /** Start values the follower was last given; NaN until the first time. */
-    private double appliedStartX = Double.NaN;
-    private double appliedStartY = Double.NaN;
-    private double appliedStartHeadingDeg = Double.NaN;
-
-    /** Builds every pose from the values as they are in Panels right now. */
-    private void buildPoses() {
-        start = poseFactory.of(START_X, START_Y, START_HEADING_DEG);
-        bOTTOMSHOOT = poseFactory.of(BOTTOM_SHOOT_X, BOTTOM_SHOOT_Y, BOTTOM_SHOOT_HEADING_DEG);
-        iNTAKEGARDEN = poseFactory.of(INTAKE_GARDEN_X, INTAKE_GARDEN_Y, 178.3634);
-        iNTAKEGARDENControl1 =
-                poseFactory.of(INTAKE_GARDEN_CONTROL1_X, INTAKE_GARDEN_CONTROL1_Y, 0);
-        tOPSHOOTStart =
-                poseFactory.of(INTAKE_GARDEN_X, INTAKE_GARDEN_Y, TOP_SHOOT_START_HEADING_DEG);
-        tOPSHOOT = poseFactory.of(TOP_SHOOT_X, TOP_SHOOT_Y, TOP_SHOOT_HEADING_DEG);
-        tOPSHOOTControl1 = poseFactory.of(TOP_SHOOT_CONTROL1_X, TOP_SHOOT_CONTROL1_Y, 0);
-        tOPSHOOTControl2 = poseFactory.of(TOP_SHOOT_CONTROL2_X, TOP_SHOOT_CONTROL2_Y, 0);
-        tOPFLOWERStart = tOPSHOOT;
-        tOPFLOWER = poseFactory.of(TOP_FLOWER_X, TOP_FLOWER_Y, TOP_FLOWER_HEADING_DEG);
-        tOPFLOWERControl1 = poseFactory.of(TOP_FLOWER_CONTROL1_X, TOP_FLOWER_CONTROL1_Y, 0);
-        fLOWERINTAKE =
-                poseFactory.of(FLOWER_INTAKE_X, FLOWER_INTAKE_Y, FLOWER_INTAKE_HEADING_DEG);
-        tOPSHOOT_2Start = fLOWERINTAKE;
-        tOPSHOOT_2 = poseFactory.of(TOP_SHOOT_2_X, TOP_SHOOT_2_Y, TOP_SHOOT_2_HEADING_DEG);
-        tOPSHOOT_2Control1 =
-                poseFactory.of(TOP_SHOOT_2_CONTROL1_X, TOP_SHOOT_2_CONTROL1_Y, 0);
-        pARKStart = tOPSHOOT_2;
-        pARK = poseFactory.of(PARK_X, PARK_Y, PARK_HEADING_DEG);
-        pARKControl1 = poseFactory.of(PARK_CONTROL1_X, PARK_CONTROL1_Y, 0);
-    }
-
-    /**
-     * Re-reads the points from Panels and, the first time and whenever the START values
-     * were edited, gives the follower the new start pose.
-     */
-    private void syncStartPose() {
-        buildPoses();
-        if (START_X != appliedStartX
-                || START_Y != appliedStartY
-                || START_HEADING_DEG != appliedStartHeadingDeg) {
-            follower.setPose(start);
-            follower.update();
-            appliedStartX = START_X;
-            appliedStartY = START_Y;
-            appliedStartHeadingDeg = START_HEADING_DEG;
-        }
-    }
+    private final Pose start = poseFactory.of(56, 8, 90);
+    private final Pose path1 = poseFactory.of(58, 14, 90);
+    private final Pose point2 = poseFactory.of(72.6586, 17.617, 180);
+    private final Pose point3 = poseFactory.of(12.9549, 9.4983, 179.5693);
+    private final Pose point3Control1 = poseFactory.of(47.9174, 9.2355, 0);
+    private final Pose point4Start = poseFactory.of(12.9549, 9.4983, 180);
+    private final Pose point4 = poseFactory.of(58, 130, 270);
+    private final Pose point4Control1 = poseFactory.of(18.5768, 78.4038, 0);
+    private final Pose point4Control2 = poseFactory.of(37.6936, 102.8587, 0);
+    private final Pose point5Start = poseFactory.of(58, 130, 270);
+    private final Pose point5 = poseFactory.of(50, 120, 90);
+    private final Pose point5Control1 = poseFactory.of(54.377, 94.3724, 0);
+    private final Pose point6 = poseFactory.of(49.787, 125, 90);
+    private final Pose point7Start = poseFactory.of(49.787, 125, 90);
+    private final Pose point7 = poseFactory.of(58, 130, 270);
+    private final Pose point7Control1 = poseFactory.of(53.1328, 96.9509, 0);
+    private final Pose point8Start = poseFactory.of(58, 130, 270);
+    private final Pose point8 = poseFactory.of(11.7423, 121.3687, 270);
+    private final Pose point8Control1 = poseFactory.of(61.1438, 121.0953, 0);
 
     // Autonomous routine
     public Command autoRoutine() {
         return sequential(
-                follow(follower, bOTTOMSHOOT()),
-                follow(follower, iNTAKEGARDEN()),
-                follow(follower, tOPSHOOT()),
-                follow(follower, tOPFLOWER()),
-                follow(follower, fLOWERINTAKE()),
-                follow(follower, tOPSHOOT_2()),
-                follow(follower, pARK())
+                follow(follower, path1()),
+                follow(follower, path2()),
+                follow(follower, path3()),
+                follow(follower, path4()),
+                follow(follower, path5()),
+                follow(follower, path6()),
+                follow(follower, path7()),
+                follow(follower, path8())
         );
     }
 
@@ -160,22 +63,10 @@ public class Auto_2_Tip_H extends LinearOpMode {
     public void runOpMode() {
         Scheduler.reset();
         follower = Constants.create(hardwareMap);
-        syncStartPose();
+        follower.setPose(start);
+        follower.update();
 
-        // While waiting for Play, pick up points edited in Panels.
-        while (opModeInInit()) {
-            syncStartPose();
-            telemetry.addLine("Path points: edit them in Panels (Auto_2_Tip_H) before Play.");
-            telemetry.addData("Start X / Y / Heading", "%.1f in / %.1f in / %.1f deg",
-                    START_X, START_Y, START_HEADING_DEG);
-            telemetry.update();
-            sleep(20);
-        }
-        if (isStopRequested()) {
-            return;
-        }
-        // Final read of the Panels values: every path is built from them right now.
-        syncStartPose();
+        waitForStart();
         schedule(autoRoutine());
 
         while (opModeIsActive()) {
@@ -195,31 +86,35 @@ public class Auto_2_Tip_H extends LinearOpMode {
         }
     }
 
-    public Path bOTTOMSHOOT() {
-        return Paths.line(start, bOTTOMSHOOT).constant(bOTTOMSHOOT);
+    public Path path1() {
+        return Paths.line(start, path1).constant(path1);
     }
 
-    public Path iNTAKEGARDEN() {
-        return Paths.curve(bOTTOMSHOOT, iNTAKEGARDENControl1, iNTAKEGARDEN).tangent();
+    public Path path2() {
+        return Paths.line(path1, point2).constant(point2);
     }
 
-    public Path tOPSHOOT() {
-        return Paths.curve(tOPSHOOTStart, tOPSHOOTControl1, tOPSHOOTControl2, tOPSHOOT).linear(tOPSHOOTStart, tOPSHOOT);
+    public Path path3() {
+        return Paths.curve(point2, point3Control1, point3).tangent();
     }
 
-    public Path tOPFLOWER() {
-        return Paths.curve(tOPFLOWERStart, tOPFLOWERControl1, tOPFLOWER).linear(tOPFLOWERStart, tOPFLOWER);
+    public Path path4() {
+        return Paths.curve(point4Start, point4Control1, point4Control2, point4).linear(point4Start, point4);
     }
 
-    public Path fLOWERINTAKE() {
-        return Paths.line(tOPFLOWER, fLOWERINTAKE).constant(fLOWERINTAKE);
+    public Path path5() {
+        return Paths.curve(point5Start, point5Control1, point5).linear(point5Start, point5);
     }
 
-    public Path tOPSHOOT_2() {
-        return Paths.curve(tOPSHOOT_2Start, tOPSHOOT_2Control1, tOPSHOOT_2).linear(tOPSHOOT_2Start, tOPSHOOT_2);
+    public Path path6() {
+        return Paths.line(point5, point6).constant(point6);
     }
 
-    public Path pARK() {
-        return Paths.curve(pARKStart, pARKControl1, pARK).linear(pARKStart, pARK);
+    public Path path7() {
+        return Paths.curve(point7Start, point7Control1, point7).linear(point7Start, point7);
+    }
+
+    public Path path8() {
+        return Paths.curve(point8Start, point8Control1, point8).linear(point8Start, point8);
     }
 }
