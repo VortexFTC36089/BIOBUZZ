@@ -48,6 +48,7 @@ public class TestAuto extends LinearOpMode {
     // are not final. Control points only use X and Y (a Bezier control point has no heading).
     private Pose start;
     private final Pose shootSpot = poseFactory.of(59, 11, 90);
+    private final Pose somth = poseFactory.of(21, 57, 180);
     private Pose point1;
     private Pose point2;
     private Pose point2Control1;
@@ -155,7 +156,7 @@ public class TestAuto extends LinearOpMode {
                 follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)
                         .with(Constants.foresightConfig.maxPathSpeed.at(Range.clip(
                                 RobotConstants.TestAutoPoints.POINT2_SPEED, 0.1, 1.0)))),
-                waitMs(200),
+                waitMs(500),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
                 shootBalls(),
@@ -164,7 +165,7 @@ public class TestAuto extends LinearOpMode {
                 runIntakeAndTransfer(),
                 waitMs(750),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
-                waitMs(1000),
+                waitMs(2000),
                 stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
                 flowerPositionA(),

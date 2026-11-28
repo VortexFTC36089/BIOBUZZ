@@ -814,33 +814,33 @@ public final class RobotConstants {
          * Speed limit for the point 1 -> point 2 curve only, as a fraction of the robot's
          * top speed: 0.3 is 70% slower, 1 is no limit. Kept between 0.1 and 1.
          */
-        @Sorter(sort = 25) public static double POINT2_SPEED = 0.3;
+        @Sorter(sort = 25) public static double POINT2_SPEED = 0.7;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
         @Sorter(sort = 30) public static double POINT3_X = 59;
-        @Sorter(sort = 31) public static double POINT3_Y = 133;
+        @Sorter(sort = 31) public static double POINT3_Y = 146;
         @Sorter(sort = 32) public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
         @Sorter(sort = 33) public static double POINT3_CONTROL1_X = 37;
         @Sorter(sort = 34) public static double POINT3_CONTROL1_Y = 122;
         /** Second Bezier control point of the point 2 -> point 3 curve. */
-        @Sorter(sort = 35) public static double POINT3_CONTROL2_X = 50;
+        @Sorter(sort = 35) public static double POINT3_CONTROL2_X = 35;
         @Sorter(sort = 36) public static double POINT3_CONTROL2_Y = 115;
 
         // ---- Point 4: curve from point 3; also the start of the point 4 -> point 3 return ----
-        @Sorter(sort = 40) public static double POINT4_X = 35;
-        @Sorter(sort = 41) public static double POINT4_Y = 53;
+        @Sorter(sort = 40) public static double POINT4_X = 45;
+        @Sorter(sort = 41) public static double POINT4_Y = 57;
         @Sorter(sort = 42) public static double POINT4_HEADING_DEG = 180;
         /** First Bezier control point of the point 3 -> point 4 curve (last on the way back). */
-        @Sorter(sort = 43) public static double POINT4_CONTROL1_X = 53;
+        @Sorter(sort = 43) public static double POINT4_CONTROL1_X = 43;
         @Sorter(sort = 44) public static double POINT4_CONTROL1_Y = 115;
         /** Second Bezier control point of the point 3 -> point 4 curve (first on the way back). */
         @Sorter(sort = 45) public static double POINT4_CONTROL2_X = 31;
         @Sorter(sort = 46) public static double POINT4_CONTROL2_Y = 122;
 
         // ---- Point 5: straight line from point 4 and back ----
-        @Sorter(sort = 50) public static double POINT5_X = 20;
-        @Sorter(sort = 51) public static double POINT5_Y = 53;
+        @Sorter(sort = 50) public static double POINT5_X = 21;
+        @Sorter(sort = 51) public static double POINT5_Y = 57;
         @Sorter(sort = 52) public static double POINT5_HEADING_DEG = 180;
 
         // ---- Point 6: straight line from point 3 ----
