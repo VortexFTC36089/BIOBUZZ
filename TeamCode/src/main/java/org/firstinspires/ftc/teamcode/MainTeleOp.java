@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
@@ -54,8 +55,8 @@ public class MainTeleOp extends OpMode {
     private static final boolean TURRET_ENABLED = false;
 
     /**
-     * Set to {@code true} to bring back the two-position {@code flower} servo
-     * on Gamepad 1 A. While {@code false} the servo is never touched (no
+     * Set to {@code true} to bring back the {@code flower} servo on Gamepad 1
+     * (A = positions A/B, hold RT = twitch). While {@code false} the servo is never touched (no
      * hardware lookup, no position command), so TeleOp runs fine without it
      * configured.
      */
@@ -99,6 +100,10 @@ public class MainTeleOp extends OpMode {
     private double fieldCentricOffsetRad;
     private boolean drivingToPose;
     private boolean servoAtPositionB;
+    /** True while {@link #twitchFlower()} was running on the last loop. */
+    private boolean flowerTwitching;
+    /** Time since the current flower twitch started. */
+    private final ElapsedTime flowerTwitchTimer = new ElapsedTime();
     private boolean wasShootTrigger;
     private Command activeShoot;
     private double speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
@@ -315,7 +320,7 @@ public class MainTeleOp extends OpMode {
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  LB hold = slow");
         telemetry.addLine("G1: Dpad Left = drive to top angle shot  |  Dpad Right = bottom angle shot");
         telemetry.addLine("G1: X = drive to bottom shooting spot  |  B = drive to opposite pose  |  any stick cancels"
-                + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
+                + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B  |  RT hold = twitch flower" : ""));
         telemetry.addLine("G1: Y = align chassis to the hive on/off  |  turn stick cancels");
         telemetry.addLine("G2: A hold = intake  |  Y hold = reverse intake");
         telemetry.addLine("G2: X hold = transfer  |  B hold = reverse transfer");
@@ -453,15 +458,20 @@ public class MainTeleOp extends OpMode {
             commandManualDrive(forward, strafe, turn);
         }
 
-        // ---- Flower ramp servo (Gamepad 1 A toggles) ----
+        // ---- Flower ramp servo (Gamepad 1 A toggles, RT hold twitches) ----
         if (servo != null) {
             if (servoToggle.update(gamepad1.a)) {
                 servoAtPositionB = !servoAtPositionB;
             }
-            // Sent every loop so a position edited in Panels moves the servo right away.
-            servo.setPosition(servoAtPositionB
-                    ? RobotConstants.FlowerRamp.POSITION_B
-                    : RobotConstants.FlowerRamp.POSITION_A);
+            if (gamepad1.right_trigger > RobotConstants.Intake.TRIGGER_DEADZONE) {
+                twitchFlower();
+            } else {
+                flowerTwitching = false;
+                // Sent every loop so a position edited in Panels moves the servo right away.
+                servo.setPosition(servoAtPositionB
+                        ? RobotConstants.FlowerRamp.POSITION_B
+                        : RobotConstants.FlowerRamp.POSITION_A);
+            }
         }
 
         // ---- Shoot balls (Gamepad 2 RT) ----
@@ -527,6 +537,23 @@ public class MainTeleOp extends OpMode {
             follower.manual(0.0, 0.0, 0.0);
             follower.update();
         }
+    }
+
+    /**
+     * Twitches the flower servo between positions B and C, switching every
+     * {@link RobotConstants.FlowerRamp#TWITCH_INTERVAL_MS}. Call it every loop for as long
+     * as the servo should twitch; the first call starts with a move to C. Does not block.
+     */
+    private void twitchFlower() {
+        if (!flowerTwitching) {
+            flowerTwitching = true;
+            flowerTwitchTimer.reset();
+        }
+        long step = (long) (flowerTwitchTimer.milliseconds()
+                / RobotConstants.FlowerRamp.TWITCH_INTERVAL_MS);
+        servo.setPosition(step % 2 == 0
+                ? RobotConstants.FlowerRamp.POSITION_C
+                : RobotConstants.FlowerRamp.POSITION_B);
     }
 
     /**
@@ -826,6 +853,8 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Shoot balls", isShootActive() ? "RUNNING" : "OFF");
         telemetry.addData("Servo", servo == null
                 ? "DISABLED"
+                : flowerTwitching
+                ? "TWITCHING"
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
                 ? "NOT CONNECTED (press Start+B on it)" : "connected");

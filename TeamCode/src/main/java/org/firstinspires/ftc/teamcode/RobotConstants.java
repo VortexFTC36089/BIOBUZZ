@@ -726,8 +726,9 @@ public final class RobotConstants {
         public static double POSITION_B = .46;
 
         /**
-         * Third pose. {@link TestAuto} twitches between this and {@link #POSITION_B}
-         * while it waits at point 5.
+         * Third pose. The flower twitch moves between this and {@link #POSITION_B}:
+         * {@link TestAuto} while it waits at point 5, {@link MainTeleOp} while Gamepad 1
+         * RT is held.
          */
         // TODO(team): measure this on the robot
         public static double POSITION_C = .47;
