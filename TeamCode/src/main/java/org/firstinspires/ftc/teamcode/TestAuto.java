@@ -46,7 +46,7 @@ public class TestAuto extends LinearOpMode {
     // are rebuilt by refreshPoints() while waiting for Play and when Play is pressed, so they
     // are not final. Control points only use X and Y (a Bezier control point has no heading).
     private Pose start;
-    private final Pose shootSpot = poseFactory.of(58, 12, 90);
+    private final Pose shootSpot = poseFactory.of(59, 11, 90);
     private Pose point1;
     private Pose point2;
     private Pose point2Control1;

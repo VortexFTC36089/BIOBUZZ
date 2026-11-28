@@ -803,8 +803,8 @@ public final class RobotConstants {
         public static double POINT2_CONTROL1_Y = 20;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
-        public static double POINT3_X = 58;
-        public static double POINT3_Y = 130;
+        public static double POINT3_X = 59;
+        public static double POINT3_Y = 133;
         public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
         public static double POINT3_CONTROL1_X = 37;
