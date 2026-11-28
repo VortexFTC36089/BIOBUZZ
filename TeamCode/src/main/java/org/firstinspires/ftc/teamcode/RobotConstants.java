@@ -3,8 +3,6 @@ package org.firstinspires.ftc.teamcode;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.math.Pose;
 
-import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
-
 /**
  * Single place for hardware map names and non-Pedro tunable values.
  *
@@ -664,10 +662,8 @@ public final class RobotConstants {
 
     /**
      * Gamepad 1 Y in Main TeleOp: the chassis turns to face the hive (see
-     * {@link ChassisAligner}). It aims from the Pinpoint position using its own
-     * {@link #OFFSET_X_INCHES} and {@link #OFFSET_Y_INCHES}; the turret's pivot offsets do
-     * not affect it. The hive coordinates and side switch are shared with {@link Turret},
-     * because both aim at the same hive.
+     * {@link ChassisAligner}). It uses the hive coordinates, side switch and pivot offset in
+     * {@link Turret}.
      *
      * <p>Tunable from Panels (RobotConstants > ChassisAlign). Panels edits are NOT saved
      * to this file and are lost when the Robot Controller app restarts: when a value is
@@ -696,25 +692,6 @@ public final class RobotConstants {
         public static double EXIT_TOLERANCE_DEGREES = 2.0;
         /** Constant correction to the aim, degrees. Positive turns the robot further left. */
         public static double TRIM_DEGREES = 0.0;
-        /*
-         * Chassis aim offsets from the Pinpoint position (the X / Y on the Driver Station),
-         * in inches, in the same robot directions as the turret's: X is front/back, Y is
-         * left/right. They start from the pod offsets in pedroPathing.Constants. Pinpoint
-         * names each offset after the POD, not the direction, so they cross over:
-         *   xPodOffset = how far SIDEWAYS the forward (X) pod is  -> OFFSET_Y_INCHES
-         *   yPodOffset = how far FORWARD the strafe (Y) pod is    -> OFFSET_X_INCHES
-         * The reported position already accounts for the pod offsets: if shots land to the
-         * right of the hive, try 0 for OFFSET_Y_INCHES.
-         */
-        // TODO(team): verify on the robot
-        /**
-         * Front/back offset of the aim point, + is forward. With {@link #TRIM_DEGREES} at 0
-         * it does not change the final heading (it slides the point along the shot line);
-         * with a trim it changes it slightly.
-         */
-        public static double OFFSET_X_INCHES = Constants.localizerConfig.yPodOffset.get();
-        /** Left/right offset of the aim point, + is left. */
-        public static double OFFSET_Y_INCHES = Constants.localizerConfig.xPodOffset.get();
     }
 
     /**
