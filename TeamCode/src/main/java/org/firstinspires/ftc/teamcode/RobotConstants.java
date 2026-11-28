@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.annotations.Configurable;
+import com.bylazar.configurables.annotations.Sorter;
 import com.pedropathing.math.Pose;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -789,59 +790,62 @@ public final class RobotConstants {
     @Configurable
     public static final class TestAutoPoints {
 
+        // @Sorter sets the order Panels lists these in (lowest first). Give every new value
+        // one too, or it is listed at the bottom.
+
         // ---- Start pose (the pose the follower and the turret start from) ----
-        public static double START_X = 56;
-        public static double START_Y = 8;
-        public static double START_HEADING_DEG = 90;
+        @Sorter(sort = 0) public static double START_X = 56;
+        @Sorter(sort = 1) public static double START_Y = 8;
+        @Sorter(sort = 2) public static double START_HEADING_DEG = 90;
 
         // ---- Point 1: straight line from start ----
-        public static double POINT1_X = 35;
-        public static double POINT1_Y = 23;
-        public static double POINT1_HEADING_DEG = 180;
+        @Sorter(sort = 10) public static double POINT1_X = 35;
+        @Sorter(sort = 11) public static double POINT1_Y = 23;
+        @Sorter(sort = 12) public static double POINT1_HEADING_DEG = 180;
 
         // ---- Point 2: curve from point 1, heading held at the point 2 heading ----
-        public static double POINT2_X = 18;
-        public static double POINT2_Y = 14;
-        public static double POINT2_HEADING_DEG = 180;
+        @Sorter(sort = 20) public static double POINT2_X = 16;
+        @Sorter(sort = 21) public static double POINT2_Y = 14;
+        @Sorter(sort = 22) public static double POINT2_HEADING_DEG = 180;
         /** Bezier control point of the point 1 -> point 2 curve. */
-        public static double POINT2_CONTROL1_X = 80;
-        public static double POINT2_CONTROL1_Y = 20;
+        @Sorter(sort = 23) public static double POINT2_CONTROL1_X = 80;
+        @Sorter(sort = 24) public static double POINT2_CONTROL1_Y = 20;
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
-        public static double POINT3_X = 59;
-        public static double POINT3_Y = 146;
-        public static double POINT3_HEADING_DEG = 270;
+        @Sorter(sort = 30) public static double POINT3_X = 59;
+        @Sorter(sort = 31) public static double POINT3_Y = 133;
+        @Sorter(sort = 32) public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
-        public static double POINT3_CONTROL1_X = 37;
-        public static double POINT3_CONTROL1_Y = 122;
+        @Sorter(sort = 33) public static double POINT3_CONTROL1_X = 37;
+        @Sorter(sort = 34) public static double POINT3_CONTROL1_Y = 122;
         /** Second Bezier control point of the point 2 -> point 3 curve. */
-        public static double POINT3_CONTROL2_X = 40;
-        public static double POINT3_CONTROL2_Y = 115;
+        @Sorter(sort = 35) public static double POINT3_CONTROL2_X = 50;
+        @Sorter(sort = 36) public static double POINT3_CONTROL2_Y = 115;
 
         // ---- Point 4: curve from point 3; also the start of the point 4 -> point 3 return ----
-        public static double POINT4_X = 45;
-        public static double POINT4_Y = 57;
-        public static double POINT4_HEADING_DEG = 180;
+        @Sorter(sort = 40) public static double POINT4_X = 35;
+        @Sorter(sort = 41) public static double POINT4_Y = 53;
+        @Sorter(sort = 42) public static double POINT4_HEADING_DEG = 180;
         /** First Bezier control point of the point 3 -> point 4 curve (last on the way back). */
-        public static double POINT4_CONTROL1_X = 33;
-        public static double POINT4_CONTROL1_Y = 115;
+        @Sorter(sort = 43) public static double POINT4_CONTROL1_X = 53;
+        @Sorter(sort = 44) public static double POINT4_CONTROL1_Y = 115;
         /** Second Bezier control point of the point 3 -> point 4 curve (first on the way back). */
-        public static double POINT4_CONTROL2_X = 31;
-        public static double POINT4_CONTROL2_Y = 122;
+        @Sorter(sort = 45) public static double POINT4_CONTROL2_X = 31;
+        @Sorter(sort = 46) public static double POINT4_CONTROL2_Y = 122;
 
         // ---- Point 5: straight line from point 4 and back ----
-        public static double POINT5_X = 21;
-        public static double POINT5_Y = 57;
-        public static double POINT5_HEADING_DEG = 180;
+        @Sorter(sort = 50) public static double POINT5_X = 20;
+        @Sorter(sort = 51) public static double POINT5_Y = 53;
+        @Sorter(sort = 52) public static double POINT5_HEADING_DEG = 180;
 
         // ---- Point 6: straight line from point 3 ----
-        public static double POINT6_X = 56;
-        public static double POINT6_Y = 8;
-        public static double POINT6_HEADING_DEG = 90;
+        @Sorter(sort = 60) public static double POINT6_X = 56;
+        @Sorter(sort = 61) public static double POINT6_Y = 8;
+        @Sorter(sort = 62) public static double POINT6_HEADING_DEG = 90;
 
         // ---- Park: final straight line from point 6 ----
-        public static double PARK_X = 17;
-        public static double PARK_Y = 93;
-        public static double PARK_HEADING_DEG = 90;
+        @Sorter(sort = 70) public static double PARK_X = 17;
+        @Sorter(sort = 71) public static double PARK_Y = 93;
+        @Sorter(sort = 72) public static double PARK_HEADING_DEG = 90;
     }
 }
