@@ -408,7 +408,7 @@ public class MainTeleOp extends OpMode {
         if (backToggle.update(gamepad1.back)) {
             stopAlign();
             drivingToHome = false;
-            follower.setPose(new Pose(2.5, 69, Math.toRadians(270.0)));
+            follower.setPose(new Pose(2.5, 69, Math.toRadians(0.0)));
             follower.manual(0.0, 0.0, 0.0);
             fieldCentricOffsetRad = 0.0;
         }

@@ -42,7 +42,7 @@ public class MainAuto extends LinearOpMode {
 
     private final Pose start = poseFactory.of(56, 8, 90);
     /** Where the balls are shot from. */
-    private final Pose shootSpot = poseFactory.of(58, 12, 90);
+    private final Pose shootSpot = poseFactory.of(59, 11, 90);
     /** Bezier control point of the shooting spot -> park curve (only X and Y are used). */
     private final Pose parkControl = poseFactory.of(13.6319, 28.4114, 0);
     /** Same spot as the park point in {@link RobotConstants.TestAutoPoints}. */
