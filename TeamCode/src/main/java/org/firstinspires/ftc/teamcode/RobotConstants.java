@@ -754,6 +754,8 @@ public final class RobotConstants {
         public static final Pose OPPOSE_POSE = new Pose(58, 135, Math.toRadians(270.0));
         /** Shooting spot in the bottom half; Main TeleOp drives here with Gamepad 1 X. */
         public static final Pose BOTTOM_SHOOT = new Pose(58, 14, Math.toRadians(90.0));
+        public static final Pose BOTTOM_ANGLE_SHOOT = new Pose(25.4, 17.3, Math.toRadians(65));
+        public static final Pose TOP_ANGLE_SHOOT = new Pose(25.4, 126.7, Math.toRadians(335));
         public static final Pose PICKUP_POSE = new Pose(24.0, 0.0, Math.toRadians(0.0));
         public static final Pose SCORE_POSE = new Pose(24.0, 24.0, Math.toRadians(90.0));
         public static final Pose PARK_POSE = new Pose(48.0, 24.0, Math.toRadians(90.0));
