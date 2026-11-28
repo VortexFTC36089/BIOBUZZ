@@ -70,6 +70,8 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton fieldCentricToggle = new ToggleButton();
     private final ToggleButton homeToggle = new ToggleButton();
     private final ToggleButton opposeToggle = new ToggleButton();
+    private final ToggleButton topAngleShootToggle = new ToggleButton();
+    private final ToggleButton bottomAngleShootToggle = new ToggleButton();
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
     private final ToggleButton backToggle = new ToggleButton();
@@ -95,7 +97,7 @@ public class MainTeleOp extends OpMode {
 
     private boolean fieldCentric;
     private double fieldCentricOffsetRad;
-    private boolean drivingToHome;
+    private boolean drivingToPose;
     private boolean servoAtPositionB;
     private boolean wasShootTrigger;
     private Command activeShoot;
@@ -176,7 +178,7 @@ public class MainTeleOp extends OpMode {
             );
         }
 
-        drivingToHome = false;
+        drivingToPose = false;
         aligning = false;
         turretHeldByAlign = false;
         speedMultiplier = RobotConstants.Drive.DEFAULT_SPEED_MULTIPLIER;
@@ -311,6 +313,7 @@ public class MainTeleOp extends OpMode {
         }
         telemetry.addLine("G1: LX/LY drive, RX turn (robot-centric)");
         telemetry.addLine("G1: Dpad Up/Down = speed +/-  |  LB hold = slow");
+        telemetry.addLine("G1: Dpad Left = drive to top angle shot  |  Dpad Right = bottom angle shot");
         telemetry.addLine("G1: X = drive to bottom shooting spot  |  B = drive to opposite pose  |  any stick cancels"
                 + (FLOWER_SERVO_ENABLED ? "  |  A = servo A/B" : ""));
         telemetry.addLine("G1: Y = align chassis to the hive on/off  |  turn stick cancels");
@@ -379,8 +382,8 @@ public class MainTeleOp extends OpMode {
 
         // Check for driver cancel BEFORE scaling by activeSpeed so the stick
         // cancel threshold stays the same in slow mode and at low speed settings.
-        if (drivingToHome && driverIsMoving(forward, strafe, turn)) {
-            drivingToHome = false;
+        if (drivingToPose && driverIsMoving(forward, strafe, turn)) {
+            drivingToPose = false;
         }
 
         // ---- Chassis align to the hive (Gamepad 1 Y toggles) ----
@@ -407,13 +410,23 @@ public class MainTeleOp extends OpMode {
         // Cancel automation first so it cannot immediately drive away from the reset pose.
         if (backToggle.update(gamepad1.back)) {
             stopAlign();
-            drivingToHome = false;
+            drivingToPose = false;
             follower.setPose(new Pose(2.5, 69, Math.toRadians(0.0)));
             follower.manual(0.0, 0.0, 0.0);
             fieldCentricOffsetRad = 0.0;
         }
 
         // ---- Optional drive-to-pose (each button needs its OWN edge detector) ----
+        // Gamepad 1 D-pad Left/Right: drive to the top/bottom angle-shot pose.
+        if (topAngleShootToggle.update(gamepad1.dpad_left)) {
+            stopAlign();
+            startDriveToPose(RobotConstants.Field.BOTTOM_ANGLE_SHOOT);
+        }
+        if (bottomAngleShootToggle.update(gamepad1.dpad_right)) {
+            stopAlign();
+            startDriveToPose(RobotConstants.Field.TOP_ANGLE_SHOOT);
+        }
+
         // Gamepad 1 X: drive to the bottom shooting spot.
         if (homeToggle.update(gamepad1.x)) {
             stopAlign();
@@ -427,9 +440,9 @@ public class MainTeleOp extends OpMode {
         }
 
         // ---- Drive ----
-        if (drivingToHome) {
+        if (drivingToPose) {
             if (!follower.isBusy()) {
-                drivingToHome = false;
+                drivingToPose = false;
                 follower.manual(0.0, 0.0, 0.0);
             }
         } else {
@@ -517,25 +530,27 @@ public class MainTeleOp extends OpMode {
     }
 
     /**
-     * Starts a straight line from the robot's current pose to
-     * {@link RobotConstants.Field#BOTTOM_SHOOT}.
+     * Starts a straight line from the robot's current pose to the given target.
      *
      * <p>If the robot is already there, a zero-length line path cannot be
      * constructed, so it simply holds that pose instead.
      */
-    private void startDriveToBottomShoot() {
+    private void startDriveToPose(Pose target) {
         Pose current = follower.pose();
-        Pose home = RobotConstants.Field.BOTTOM_SHOOT;
 
-        if (current.distance(home) < 0.5) {
-            follower.hold(home);
-            drivingToHome = false;
+        if (current.distance(target) < 0.5) {
+            follower.hold(target);
+            drivingToPose = false;
             return;
         }
 
-        Path homePath = line(current, home).linear(current, home);
-        follower.follow(homePath);
-        drivingToHome = true;
+        Path targetPath = line(current, target).linear(current, target);
+        follower.follow(targetPath);
+        drivingToPose = true;
+    }
+
+    private void startDriveToBottomShoot() {
+        startDriveToPose(RobotConstants.Field.BOTTOM_SHOOT);
     }
 
     /**
@@ -549,13 +564,13 @@ public class MainTeleOp extends OpMode {
 
         if (current.distance(home) < 0.5) {
             follower.hold(home);
-            drivingToHome = false;
+            drivingToPose = false;
             return;
         }
 
         Path homePath = line(current, home).linear(current, home);
         follower.follow(homePath);
-        drivingToHome = true;
+        drivingToPose = true;
     }
 
     /**
@@ -566,7 +581,7 @@ public class MainTeleOp extends OpMode {
      */
     private void startAlign() {
         aligning = true;
-        drivingToHome = false;
+        drivingToPose = false;
         boolean top = follower.pose().y() >= RobotConstants.Turret.SIDE_SWITCH_Y_INCHES;
         if (turret != null) {
             if (RobotConstants.ChassisAlign.HOLD_TURRET_STRAIGHT) {
@@ -814,7 +829,7 @@ public class MainTeleOp extends OpMode {
                 : (servoAtPositionB ? "POSITION_B" : "POSITION_A"));
         telemetry.addData("Gamepad 2", gamepad2.getGamepadId() == Gamepad.ID_UNASSOCIATED
                 ? "NOT CONNECTED (press Start+B on it)" : "connected");
-        telemetry.addData("Drive to home", drivingToHome ? "FOLLOWING" : "OFF");
+        telemetry.addData("Drive to pose", drivingToPose ? "FOLLOWING" : "OFF");
         telemetry.addData("Loop (ms)", loopMs);
         telemetry.update();
     }
