@@ -800,7 +800,7 @@ public final class RobotConstants {
         public static double POINT1_HEADING_DEG = 180;
 
         // ---- Point 2: curve from point 1, heading held at the point 2 heading ----
-        public static double POINT2_X = 16;
+        public static double POINT2_X = 18;
         public static double POINT2_Y = 14;
         public static double POINT2_HEADING_DEG = 180;
         /** Bezier control point of the point 1 -> point 2 curve. */
@@ -809,29 +809,29 @@ public final class RobotConstants {
 
         // ---- Point 3: curve from point 2 (a shot is taken here) ----
         public static double POINT3_X = 59;
-        public static double POINT3_Y = 133;
+        public static double POINT3_Y = 146;
         public static double POINT3_HEADING_DEG = 270;
         /** First Bezier control point of the point 2 -> point 3 curve. */
         public static double POINT3_CONTROL1_X = 37;
         public static double POINT3_CONTROL1_Y = 122;
         /** Second Bezier control point of the point 2 -> point 3 curve. */
-        public static double POINT3_CONTROL2_X = 50;
+        public static double POINT3_CONTROL2_X = 40;
         public static double POINT3_CONTROL2_Y = 115;
 
         // ---- Point 4: curve from point 3; also the start of the point 4 -> point 3 return ----
-        public static double POINT4_X = 35;
-        public static double POINT4_Y = 53;
+        public static double POINT4_X = 45;
+        public static double POINT4_Y = 57;
         public static double POINT4_HEADING_DEG = 180;
         /** First Bezier control point of the point 3 -> point 4 curve (last on the way back). */
-        public static double POINT4_CONTROL1_X = 53;
+        public static double POINT4_CONTROL1_X = 33;
         public static double POINT4_CONTROL1_Y = 115;
         /** Second Bezier control point of the point 3 -> point 4 curve (first on the way back). */
         public static double POINT4_CONTROL2_X = 31;
         public static double POINT4_CONTROL2_Y = 122;
 
         // ---- Point 5: straight line from point 4 and back ----
-        public static double POINT5_X = 20;
-        public static double POINT5_Y = 53;
+        public static double POINT5_X = 21;
+        public static double POINT5_Y = 57;
         public static double POINT5_HEADING_DEG = 180;
 
         // ---- Point 6: straight line from point 3 ----
