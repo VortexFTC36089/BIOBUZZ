@@ -157,9 +157,10 @@ public class TestAuto extends LinearOpMode {
                 follow(follower, Paths.curve(point1, point2Control1, point2).constant(point2)
                         .with(Constants.foresightConfig.maxPathSpeed.at(Range.clip(
                                 RobotConstants.TestAutoPoints.POINT2_SPEED, 0.1, 1.0)))),
-                waitMs(500),
-                stopIntakeAndTransfer(),
+                waitMs(750),
                 follow(follower, Paths.curve(point2, point3Control1, point3Control2, point3).linear(point2, point3)),
+                stopIntakeAndTransfer(),
+                waitMs(200),
                 shootBalls(),
                 follow(follower, Paths.curve(point3, point4Control1, point4Control2, point4).linear(point3, point4)),
                 flowerPositionB(),
@@ -167,8 +168,9 @@ public class TestAuto extends LinearOpMode {
                 waitMs(750),
                 follow(follower, Paths.line(point4, point5).linear(point4, point5)),
                 twitchFlower(2000),
-                stopIntakeAndTransfer(),
                 follow(follower, Paths.line(point5, point4).linear(point5, point4)),
+                stopIntakeAndTransfer(),
+                waitMs(200),
                 flowerPositionA(),
                 // Same curve driven backwards, so the control points are in reverse order.
                 follow(follower, Paths.curve(point4, point4Control2, point4Control1, point3).linear(point4, point3)),

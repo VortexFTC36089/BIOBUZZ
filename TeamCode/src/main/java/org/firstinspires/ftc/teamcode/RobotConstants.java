@@ -815,7 +815,7 @@ public final class RobotConstants {
         @Sorter(sort = 12) public static double POINT1_HEADING_DEG = 180;
 
         // ---- Point 2: curve from point 1, heading held at the point 2 heading ----
-        @Sorter(sort = 20) public static double POINT2_X = 16;
+        @Sorter(sort = 20) public static double POINT2_X = 17;
         @Sorter(sort = 21) public static double POINT2_Y = 14;
         @Sorter(sort = 22) public static double POINT2_HEADING_DEG = 180;
         /** Bezier control point of the point 1 -> point 2 curve. */
