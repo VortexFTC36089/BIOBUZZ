@@ -72,6 +72,7 @@ public class MainTeleOp extends OpMode {
     private final ToggleButton opposeToggle = new ToggleButton();
     private final ToggleButton speedUpToggle = new ToggleButton();
     private final ToggleButton speedDownToggle = new ToggleButton();
+    private final ToggleButton backToggle = new ToggleButton();
     private final ToggleButton servoToggle = new ToggleButton();
     private final ToggleButton turretHiveToggle = new ToggleButton();
     private final ToggleButton turretForwardToggle = new ToggleButton();
@@ -402,12 +403,14 @@ public class MainTeleOp extends OpMode {
         strafe *= activeSpeed;
         turn *= activeSpeed;
 
-        // Back (not Start) so we do not fight the Driver Station's Start
-        // "emergency" habit. Records the current field heading as field-centric
-        // "forward" WITHOUT calling follower.setPose(...) — overwriting the
-        // localizer heading would throw off the turret's field aiming.
-        if (gamepad1.back) {
-            fieldCentricOffsetRad = follower.pose().heading();
+        // Back resets the Pinpoint pose to the requested known position.
+        // Cancel automation first so it cannot immediately drive away from the reset pose.
+        if (backToggle.update(gamepad1.back)) {
+            stopAlign();
+            drivingToHome = false;
+            follower.setPose(new Pose(2.5, 69, Math.toRadians(270.0)));
+            follower.manual(0.0, 0.0, 0.0);
+            fieldCentricOffsetRad = 0.0;
         }
 
         // ---- Optional drive-to-pose (each button needs its OWN edge detector) ----
